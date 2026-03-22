@@ -1,0 +1,1 @@
+# Kepmodositas-vizsgalata-kepzaj-alapjan
