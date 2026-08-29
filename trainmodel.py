@@ -1,115 +1,139 @@
+"""
+
+
+FIX #1 (kritikus): A StandardScalert egyszer illesztjük a TELJES tanítóhalmazon,
+                   majd elmentjük a modellel együtt. Nem képenként külön.
+
+FIX #2: Kompatibilis az itier_fixed.py-val (β küszöb javítva, nincs per-képes skálázás).
+"""
+
 import json
 import joblib
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import StandardScaler
 from itier import extract_features_from_image
 
 
 def balance_classes(X, y):
-    """Kiegyensúlyozza az adathalmazt alul-mintavételezéssel (undersampling)."""
-    X_arr = np.array(X)
-    y_arr = np.array(y)
+    """
+    Osztályok kiegyensúlyozása alul-mintavételezéssel (undersampling).
+    A cikk (Section 3.4) kiegyensúlyozott Border/Uniform arányt ír elő.
+    """
+    X_arr = np.array(X, dtype=np.float32)
+    y_arr = np.array(y, dtype=np.int32)
 
-    border_idx = np.where(y_arr == 1)[0]
+    border_idx  = np.where(y_arr == 1)[0]
     uniform_idx = np.where(y_arr == 0)[0]
 
-    # Megkeressük a kisebb osztály méretét
     min_size = min(len(border_idx), len(uniform_idx))
-
     if min_size == 0:
         return np.array([]), np.array([])
 
-    # Véletlenszerűen kiválasztunk 'min_size' darabot mindkét osztályból
     np.random.seed(42)
-    border_idx_sampled = np.random.choice(border_idx, min_size, replace=False)
-    uniform_idx_sampled = np.random.choice(uniform_idx, min_size, replace=False)
+    border_sampled  = np.random.choice(border_idx,  min_size, replace=False)
+    uniform_sampled = np.random.choice(uniform_idx, min_size, replace=False)
 
-    balanced_idx = np.concatenate([border_idx_sampled, uniform_idx_sampled])
-    np.random.shuffle(balanced_idx)  # Összekeverjük a sorrendet
+    balanced_idx = np.concatenate([border_sampled, uniform_sampled])
+    np.random.shuffle(balanced_idx)
 
     return X_arr[balanced_idx], y_arr[balanced_idx]
 
 
 if __name__ == "__main__":
-    print("--- Modell Betanítása (Random Forest + GridSearch) ---")
+    print("--- Modell Betanítása (Random Forest + GlobalScaler) ---")
 
     # ==========================================================
     # KONFIGURÁCIÓ
-    # Ha a teljes adatbázison akarod futtatni, írd át erre: MAX_IMAGES = None
-    MAX_IMAGES = 100
+    MAX_IMAGES = None   # None = teljes adatbázis
     # ==========================================================
 
     with open("dataset_splits.json", "r") as f:
         data = json.load(f)
 
     train_images = data["train_images"]
-    train_masks = data["train_masks"]
+    train_masks  = data["train_masks"]
 
     if MAX_IMAGES is not None:
-        # Keresünk a te valós mappaneveid ("tp", "4cam") alapján is
-        casia_pairs = [(img, mask) for img, mask in zip(train_images, train_masks) if
-                       "tp" in img.lower() or "casia" in img.lower()]
-        columbia_pairs = [(img, mask) for img, mask in zip(train_images, train_masks) if
-                          "4cam" in img.lower() or "columbia" in img.lower()]
+        casia_pairs    = [(img, msk) for img, msk in zip(train_images, train_masks)
+                          if "tp" in img.lower() or "casia" in img.lower()]
+        columbia_pairs = [(img, msk) for img, msk in zip(train_images, train_masks)
+                          if "4cam" in img.lower() or "columbia" in img.lower()]
 
         half = MAX_IMAGES // 2
-        selected_pairs = casia_pairs[:half] + columbia_pairs[:half]
+        selected = casia_pairs[:half] + columbia_pairs[:half]
+        if not selected:
+            selected = list(zip(train_images, train_masks))[:MAX_IMAGES]
 
-        # Ha valamiért még így sem találna, akkor egyszerűen csak veszi az első 20-at
-        if len(selected_pairs) == 0:
-            selected_pairs = list(zip(train_images, train_masks))[:MAX_IMAGES]
-
-        train_images = [p[0] for p in selected_pairs]
-        train_masks = [p[1] for p in selected_pairs]
-        print(f"Figyelem: Csak {len(train_images)} képen tanítunk a gyors teszt miatt!")
+        train_images = [p[0] for p in selected]
+        train_masks  = [p[1] for p in selected]
+        print(f"Gyors teszt: {len(train_images)} képen tanítunk.")
     else:
-        print(f"Tanítás az ÖSSZES ({len(train_images)}) képen. Ez eltarthat egy darabig!")
+        print(f"Teljes tanítóhalmaz: {len(train_images)} kép.")
 
-    X_train_raw, y_train_raw = [], []
+    # --- 1. NYERS JELLEMZŐK ÖSSZEGYŰJTÉSE ---
+    X_raw, y_raw = [], []
 
     for i, (img_p, mask_p) in enumerate(zip(train_images, train_masks)):
-        print(f"Kép feldolgozása ({i + 1}/{len(train_images)}): {img_p}")
+        print(f"Feldolgozás ({i+1}/{len(train_images)}): {img_p}")
         feats, labels, _, _ = extract_features_from_image(img_p, mask_p)
 
         if feats is not None and labels is not None and len(feats) > 0:
-            X_train_raw.extend(feats)
-            y_train_raw.extend(labels)
+            X_raw.append(feats)
+            y_raw.append(labels)
 
-    print(
-        f"\nJellemzők kinyerve. Eredeti eloszlás -> Uniform(0): {y_train_raw.count(0)}, Border(1): {y_train_raw.count(1)}")
-
-    # 1. Osztályok kiegyensúlyozása a cikk iránymutatása alapján
-    X_train, y_train = balance_classes(X_train_raw, y_train_raw)
-
-    if len(X_train) == 0:
-        print("Hiba: Nincs elég adat a betanításhoz. Ellenőrizd a maszkokat!")
+    if not X_raw:
+        print("Hiba: Nem sikerült jellemzőket kinyerni!")
         exit()
 
-    print(f"Kiegyensúlyozott eloszlás -> Uniform(0): {np.sum(y_train == 0)}, Border(1): {np.sum(y_train == 1)}")
+    X_all = np.vstack(X_raw)
+    y_all = np.concatenate(y_raw)
 
-    # 2. Random Forest inicializálása és GridSearch beállítása
-    print("\nRandom Forest betanítása és hiperparaméterek keresése (GridSearchCV)...")
+    border_count  = int(np.sum(y_all == 1))
+    uniform_count = int(np.sum(y_all == 0))
+    print(f"\nNyers eloszlás → Uniform(0): {uniform_count}, Border(1): {border_count}")
+
+    # --- 2. OSZTÁLYOK KIEGYENSÚLYOZÁSA ---
+    X_bal, y_bal = balance_classes(X_all, y_all)
+    if len(X_bal) == 0:
+        print("Hiba: Nincs elég adat a kiegyensúlyozáshoz!")
+        exit()
+    print(f"Kiegyensúlyozott → Uniform: {int(np.sum(y_bal==0))}, Border: {int(np.sum(y_bal==1))}")
+
+    # --- 3. GLOBÁLIS STANDARDIZÁLÁS (FIX #1) ---
+    # A scaler-t EGYSZER illesztjük a teljes kiegyensúlyozott tanítóhalmazra,
+    # majd elmentjük, hogy a teszteléskor UGYANAZT tudjuk alkalmazni.
+    print("\nGlobális StandardScaler illesztése...")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_bal)
+
+    # Scaler mentése
+    joblib.dump(scaler, "itier_scaler.pkl")
+    print("Scaler elmentve: 'itier_scaler.pkl'")
+
+    # --- 4. RANDOM FOREST + GRIDSEARCH ---
+    print("\nRandom Forest betanítása (GridSearchCV)...")
     base_rf = RandomForestClassifier(random_state=42)
 
-    # A keresendő paraméterek (finomhangolás)
     param_grid = {
-        'n_estimators': [50, 100, 200],  # Hány fa legyen az erdőben
-        'max_depth': [10, 20, None],  # Milyen mélyek lehessenek a fák
-        'criterion': ['gini', 'entropy']  # Döntési kritérium
+        'n_estimators': [50, 100, 200],
+        'max_depth':    [10, 20, None],
+        'criterion':    ['gini', 'entropy']
     }
 
-    # 3-szoros keresztvalidáció, hogy biztosan robusztus legyen a modell
-    grid_search = GridSearchCV(estimator=base_rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+    grid_search = GridSearchCV(
+        estimator=base_rf,
+        param_grid=param_grid,
+        cv=3,
+        n_jobs=-1,
+        verbose=2
+    )
+    grid_search.fit(X_scaled, y_bal)
 
-    # Betanítás
-    grid_search.fit(X_train, y_train)
+    print("\nLegjobb paraméterek:", grid_search.best_params_)
 
-    print("\nLegjobb megtalált paraméterek:", grid_search.best_params_)
-
-    # A legjobb modell kimentése
     best_model = grid_search.best_estimator_
-    model_filename = "itier_rf_model.pkl"
-    joblib.dump(best_model, model_filename)
-
-    print(f"\nA legjobb modell sikeresen elmentve: '{model_filename}'")
+    joblib.dump(best_model, "itier_rf_model.pkl")
+    print("Modell elmentve: 'itier_rf_model.pkl'")
+    print("\nKész! Mind a modell, mind a scaler el van mentve.")

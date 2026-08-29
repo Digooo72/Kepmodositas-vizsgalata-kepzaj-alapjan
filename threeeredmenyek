@@ -1,0 +1,269 @@
+"C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan\.venv\Scripts\python.exe" "C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan\evaluatemodel_three.py"
+============================================================
+  Összehasonlító Kiértékelés: RFC vs SVM vs K-Means
+============================================================
+ROC küszöb betöltve (t_hat): 0.9800
+Megjegyzés: t_hat csak képszintű döntéshez — pixelszintű lokalizáció saját adaptív küszöböt használ.
+
+Tesztelendő képek: 45
+
+[1/45] canong3_canonxt_sub_20  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.9397
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9406
+  [K-Means] Döntés: VALÓDI     | max_p=0.816 (t_hat=0.980) | Pixel F1=0.9655
+
+[2/45] canong3_kodakdcs330_sub_13  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.9444
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8997
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[3/45] nikond70_kodakdcs330_sub_04  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.6113
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5427
+  [K-Means] Döntés: VALÓDI     | max_p=0.920 (t_hat=0.980) | Pixel F1=0.3628
+
+[4/45] canong3_nikond70_sub_19  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.8421
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8413
+  [K-Means] Döntés: VALÓDI     | max_p=0.704 (t_hat=0.980) | Pixel F1=0.0000
+
+[5/45] nikond70_canonxt_sub_26  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5049
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9539
+  [K-Means] Döntés: VALÓDI     | max_p=0.868 (t_hat=0.980) | Pixel F1=0.4799
+
+[6/45] canong3_canonxt_sub_16  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.9059
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9004
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[7/45] canong3_canonxt_sub_25  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.995 (t_hat=0.980) | Pixel F1=0.0000
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.0000
+  [K-Means] Döntés: VALÓDI     | max_p=0.820 (t_hat=0.980) | Pixel F1=0.0000
+
+[8/45] canong3_nikond70_sub_09  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.985 (t_hat=0.980) | Pixel F1=0.9149
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9052
+  [K-Means] Döntés: VALÓDI     | max_p=0.778 (t_hat=0.980) | Pixel F1=0.0968
+
+[9/45] canonxt_kodakdcs330_sub_24  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.8941
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8655
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[10/45] canonxt_kodakdcs330_sub_29  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8035
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7459
+  [K-Means] Döntés: VALÓDI     | max_p=0.938 (t_hat=0.980) | Pixel F1=0.7849
+
+[11/45] canonxt_kodakdcs330_sub_04  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5854
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7621
+  [K-Means] Döntés: VALÓDI     | max_p=0.940 (t_hat=0.980) | Pixel F1=0.0727
+
+[12/45] nikond70_kodakdcs330_sub_10  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.8029
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7918
+  [K-Means] Döntés: VALÓDI     | max_p=0.909 (t_hat=0.980) | Pixel F1=0.6560
+
+[13/45] canong3_nikond70_sub_10  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.8977
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9025
+  [K-Means] Döntés: VALÓDI     | max_p=0.856 (t_hat=0.980) | Pixel F1=0.3135
+
+[14/45] nikond70_canonxt_sub_23  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.990 (t_hat=0.980) | Pixel F1=0.2847
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.3176
+  [K-Means] Döntés: VALÓDI     | max_p=0.816 (t_hat=0.980) | Pixel F1=0.0000
+
+[15/45] canong3_kodakdcs330_sub_16  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.997 (t_hat=0.980) | Pixel F1=0.4631
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6886
+  [K-Means] Döntés: VALÓDI     | max_p=0.884 (t_hat=0.980) | Pixel F1=0.8100
+
+[16/45] canong3_canonxt_sub_17  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.9047
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9037
+  [K-Means] Döntés: VALÓDI     | max_p=0.706 (t_hat=0.980) | Pixel F1=0.4220
+
+[17/45] canong3_kodakdcs330_sub_22  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.7288
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8159
+  [K-Means] Döntés: VALÓDI     | max_p=0.904 (t_hat=0.980) | Pixel F1=0.7803
+
+[18/45] nikond70_canonxt_sub_06  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.7715
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7770
+  [K-Means] Döntés: VALÓDI     | max_p=0.841 (t_hat=0.980) | Pixel F1=0.2055
+
+[19/45] canonxt_kodakdcs330_sub_07  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7945
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7081
+  [K-Means] Döntés: VALÓDI     | max_p=0.915 (t_hat=0.980) | Pixel F1=0.8820
+
+[20/45] canong3_kodakdcs330_sub_27  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7578
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7506
+  [K-Means] Döntés: VALÓDI     | max_p=0.868 (t_hat=0.980) | Pixel F1=0.8114
+
+[21/45] canonxt_kodakdcs330_sub_08  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6698
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5492
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[22/45] nikond70_canonxt_sub_01  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.4074
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.4048
+  [K-Means] Döntés: VALÓDI     | max_p=0.777 (t_hat=0.980) | Pixel F1=0.1881
+
+[23/45] nikond70_canonxt_sub_24  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9183
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9120
+  [K-Means] Döntés: VALÓDI     | max_p=0.839 (t_hat=0.980) | Pixel F1=0.9262
+
+[24/45] canong3_kodakdcs330_sub_01  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7680
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7742
+  [K-Means] Döntés: VALÓDI     | max_p=0.902 (t_hat=0.980) | Pixel F1=0.9258
+
+[25/45] canong3_canonxt_sub_10  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.9110
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9092
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[26/45] nikond70_kodakdcs330_sub_23  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.3871
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8952
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[27/45] canong3_nikond70_sub_01  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.9337
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9292
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[28/45] canong3_canonxt_sub_19  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9387
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9469
+  [K-Means] Döntés: VALÓDI     | max_p=0.838 (t_hat=0.980) | Pixel F1=0.1227
+
+[29/45] nikond70_canonxt_sub_29  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.8031
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8573
+  [K-Means] Döntés: VALÓDI     | max_p=0.918 (t_hat=0.980) | Pixel F1=0.4686
+
+[30/45] nikond70_kodakdcs330_sub_24  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7274
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9197
+  [K-Means] Döntés: VALÓDI     | max_p=0.851 (t_hat=0.980) | Pixel F1=0.1318
+
+[31/45] canonxt_kodakdcs330_sub_20  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.996 (t_hat=0.980) | Pixel F1=0.5595
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6639
+  [K-Means] Döntés: VALÓDI     | max_p=0.900 (t_hat=0.980) | Pixel F1=0.9585
+
+[32/45] canong3_kodakdcs330_sub_26  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7413
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6928
+  [K-Means] Döntés: VALÓDI     | max_p=0.900 (t_hat=0.980) | Pixel F1=0.2844
+
+[33/45] nikond70_canonxt_sub_21  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.9285
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9230
+  [K-Means] Döntés: VALÓDI     | max_p=0.770 (t_hat=0.980) | Pixel F1=0.4666
+
+[34/45] nikond70_canonxt_sub_07  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.997 (t_hat=0.980) | Pixel F1=0.8995
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.1895
+  [K-Means] Döntés: VALÓDI     | max_p=0.928 (t_hat=0.980) | Pixel F1=0.0000
+
+[35/45] canong3_nikond70_sub_07  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.9403
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9436
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[36/45] canong3_canonxt_sub_30  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.991 (t_hat=0.980) | Pixel F1=0.9202
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9140
+  [K-Means] Döntés: VALÓDI     | max_p=0.809 (t_hat=0.980) | Pixel F1=0.2073
+
+[37/45] canonxt_kodakdcs330_sub_28  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8278
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7882
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[38/45] canong3_nikond70_sub_06  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.992 (t_hat=0.980) | Pixel F1=0.0815
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8856
+  [K-Means] Döntés: VALÓDI     | max_p=0.855 (t_hat=0.980) | Pixel F1=0.1473
+
+[39/45] canong3_nikond70_sub_08  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.5937
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5967
+  [K-Means] Döntés: VALÓDI     | max_p=0.920 (t_hat=0.980) | Pixel F1=0.0769
+
+[40/45] canong3_kodakdcs330_sub_02  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.998 (t_hat=0.980) | Pixel F1=0.7343
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.5906
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[41/45] canong3_canonxt_sub_13  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.997 (t_hat=0.980) | Pixel F1=0.9145
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9126
+  [K-Means] Döntés: VALÓDI     | max_p=0.824 (t_hat=0.980) | Pixel F1=0.9245
+
+[42/45] canong3_kodakdcs330_sub_12  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7658
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.7780
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[43/45] nikond70_canonxt_sub_05  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9311
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.9376
+  [K-Means] Döntés: VALÓDI     | max_p=0.918 (t_hat=0.980) | Pixel F1=0.2265
+
+[44/45] canonxt_kodakdcs330_sub_11  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=0.999 (t_hat=0.980) | Pixel F1=0.6545
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6136
+  [K-Means] Döntés: VALÓDI     | max_p=nan (t_hat=0.980) | Pixel F1=0.0000
+
+[45/45] nikond70_kodakdcs330_sub_12  (HAMISÍTOTT)
+  [RFC    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.8490
+  [SVM    ] Döntés: HAMISÍTOTT | max_p=1.000 (t_hat=0.980) | Pixel F1=0.6286
+  [K-Means] Döntés: VALÓDI     | max_p=0.928 (t_hat=0.980) | Pixel F1=0.8720
+
+
+============================================================
+  VÉGSŐ TESZTEREDMÉNYEK (Test Set)
+============================================================
+
+--- RFC ---
+  Képszintű AUC  (ROC):       nan
+  Képszintű F1   (t_hat):     1.0000
+  Pixelszintű F1 (átlag):     0.7368
+  Eredmények mappája:         evaluation_results_rfc/
+
+--- SVM ---
+  Képszintű AUC  (ROC):       nan
+  Képszintű F1   (t_hat):     1.0000
+  Pixelszintű F1 (átlag):     0.7593
+  Eredmények mappája:         evaluation_results_svm/
+
+--- K-Means ---
+  Képszintű AUC  (ROC):       0.0000
+  Képszintű F1   (t_hat):     0.0000
+  Pixelszintű F1 (átlag):     0.3238
+  Eredmények mappája:         evaluation_results_k_means/
+
+============================================================
+Modell            AUC   Kép F1   Pixel F1
+------------------------------------------
+RFC               nan   1.0000     0.7368
+SVM               nan   1.0000     0.7593
+K-Means        0.0000   0.0000     0.3238
+C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan\.venv\Lib\site-packages\sklearn\metrics\_ranking.py:442: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan\.venv\Lib\site-packages\sklearn\metrics\_ranking.py:442: UndefinedMetricWarning: Only one class is present in y_true. ROC AUC score is not defined in that case.
+  warnings.warn(
+
+Process finished with exit code 0
