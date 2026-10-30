@@ -1,0 +1,9 @@
+{
+    "threshold": 0.5370979772332692,
+    "method": "ks",
+    "auc": 0.9950617283950617,
+    "fpr_at_optimum": 0.044444444444444446,
+    "tpr_at_optimum": 0.9555555555555556,
+    "spliced_count": 45,
+    "authentic_count": 45
+}

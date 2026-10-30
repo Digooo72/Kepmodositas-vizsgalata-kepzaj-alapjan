@@ -1,0 +1,79 @@
+{
+    "RFC": {
+        "auc_roc": 0.9906172839506172,
+        "img_f1_roc": 0.9782608695652174,
+        "t_hat_roc": 0.987500011920929,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9950617283950617,
+        "img_f1_ks": 0.9555555555555556,
+        "t_hat_ks": 0.5370979772332692,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.8078391605182329
+    },
+    "SVM": {
+        "auc_roc": 0.708641975308642,
+        "img_f1_roc": 0.7021276595744681,
+        "t_hat_roc": 0.9895088076591492,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9032098765432098,
+        "img_f1_ks": 0.8505747126436781,
+        "t_hat_ks": 0.48046747698138914,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.779532226055543
+    },
+    "K-Means": {
+        "auc_roc": 0.7669135802469136,
+        "img_f1_roc": 0.7191011235955056,
+        "t_hat_roc": 0.830696702003479,
+        "score_flipped_roc": false,
+        "auc_ks": 0.7841975308641976,
+        "img_f1_ks": 0.735632183908046,
+        "t_hat_ks": 0.3928989465205122,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.6183109191568588
+    },
+    "MLP": {
+        "auc_roc": 0.5308641975308641,
+        "img_f1_roc": 0.07692307692307693,
+        "t_hat_roc": 0.9598283648490906,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9535802469135802,
+        "img_f1_ks": 0.9111111111111111,
+        "t_hat_ks": 0.5100175445009458,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.8108652652877752
+    },
+    "GMM": {
+        "auc_roc": 0.5,
+        "img_f1_roc": 0.6666666666666666,
+        "t_hat_roc": 1.0,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9960493827160493,
+        "img_f1_ks": 0.9782608695652174,
+        "t_hat_ks": 0.05958739649970968,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.6039604710702601
+    },
+    "BayesianEM": {
+        "auc_roc": 0.5,
+        "img_f1_roc": 0.6666666666666666,
+        "t_hat_roc": 1.0,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9575308641975309,
+        "img_f1_ks": 0.9111111111111111,
+        "t_hat_ks": 0.2727192701864576,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.7452435602413741
+    },
+    "GradientBoosting": {
+        "auc_roc": 0.9985185185185185,
+        "img_f1_roc": 0.9473684210526315,
+        "t_hat_roc": 0.9942991137504578,
+        "score_flipped_roc": false,
+        "auc_ks": 0.9792592592592592,
+        "img_f1_ks": 0.9555555555555556,
+        "t_hat_ks": 0.45791860808265705,
+        "score_flipped_ks": false,
+        "mean_pixel_f1": 0.8400967490965154
+    }
+}
