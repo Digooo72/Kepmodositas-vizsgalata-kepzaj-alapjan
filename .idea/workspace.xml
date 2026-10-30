@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="10f8a1ef-4e6a-4605-a289-a4584bf3d02e" name="Changes" comment="start">
-      <change afterPath="$PROJECT_DIR$/evaluate_model.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/itier.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/prepare_database.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/trainmodel.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/Kepmodositas-vizsgalata kepzaj alapjan.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Kepmodositas-vizsgalata kepzaj alapjan.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="10f8a1ef-4e6a-4605-a289-a4584bf3d02e" name="Changes" comment="harom">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -39,21 +33,21 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "Digooo72"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Digooo72&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/Digooo72/Kepmodositas-vizsgalata-kepzaj-alapjan.git",
-    "accountId": "5c998524-f268-4137-875b-5bc2b384bd99"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Digooo72/Kepmodositas-vizsgalata-kepzaj-alapjan.git&quot;,
+    &quot;accountId&quot;: &quot;5c998524-f268-4137-875b-5bc2b384bd99&quot;
   }
-}]]></component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 4
-}]]></component>
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
   <component name="ProjectId" id="3BIFlTkO7XdkqtwaEOTzhKF4yjb" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
@@ -62,11 +56,25 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Python.Evaluate filter ablation.executor": "Run",
+    "Python.clustering_models.executor": "Run",
     "Python.evaluate_model.executor": "Run",
+    "Python.evaluate_model_roc.executor": "Run",
+    "Python.evaluate_model_strict.executor": "Run",
+    "Python.evaluate_robustness.executor": "Run",
+    "Python.evaluatemodel_five.executor": "Run",
+    "Python.evaluatemodel_seven.executor": "Run",
+    "Python.evaluatemodel_three.executor": "Run",
     "Python.prepare_database.executor": "Run",
     "Python.trainmodel.executor": "Run",
+    "Python.trainmodel_five.executor": "Run",
+    "Python.trainmodel_seven.executor": "Run",
+    "Python.trainmodel_three.executor": "Run",
+    "Python.tune_treshold.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "master",
+    "git-widget-placeholder": "haromosztalylehetkesz",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/jancs/PycharmProjects/Kepmodositas-vizsgalata kepzaj alapjan",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -77,12 +85,15 @@
   }
 }]]></component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\jancs\PycharmProjects\Kepmodositas-vizsgalata kepzaj alapjan" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.evaluate_model">
-    <configuration name="evaluate_model" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+  <component name="RunManager" selected="Python.evaluatemodel_seven">
+    <configuration name="Evaluate filter ablation" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="Kepmodositas-vizsgalata kepzaj alapjan" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -96,7 +107,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/evaluate_model.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Evaluate filter ablation.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -105,7 +116,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="prepare_database" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="clustering_models" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="Kepmodositas-vizsgalata kepzaj alapjan" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -119,7 +130,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/prepare_database.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/clustering_models.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -128,7 +139,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="trainmodel" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="evaluate_robustness" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="Kepmodositas-vizsgalata kepzaj alapjan" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -142,7 +153,53 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/trainmodel.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/evaluate_robustness.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="evaluatemodel_seven" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Kepmodositas-vizsgalata kepzaj alapjan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/evaluatemodel_seven.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="trainmodel_seven" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Kepmodositas-vizsgalata kepzaj alapjan" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/trainmodel_seven.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -153,9 +210,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.evaluate_model" />
-        <item itemvalue="Python.trainmodel" />
-        <item itemvalue="Python.prepare_database" />
+        <item itemvalue="Python.evaluatemodel_seven" />
+        <item itemvalue="Python.evaluate_robustness" />
+        <item itemvalue="Python.Evaluate filter ablation" />
+        <item itemvalue="Python.trainmodel_seven" />
+        <item itemvalue="Python.clustering_models" />
       </list>
     </recent_temporary>
   </component>
@@ -175,7 +234,42 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1774168828302</updated>
-      <workItem from="1774168829678" duration="4348000" />
+      <workItem from="1774168829678" duration="12193000" />
+      <workItem from="1774278550468" duration="70000" />
+      <workItem from="1774285950962" duration="6434000" />
+      <workItem from="1774345549994" duration="18898000" />
+      <workItem from="1774520490913" duration="23000" />
+      <workItem from="1774689004635" duration="14339000" />
+      <workItem from="1774887077611" duration="4083000" />
+      <workItem from="1774946293139" duration="15274000" />
+      <workItem from="1775115109629" duration="6207000" />
+      <workItem from="1775638335124" duration="16053000" />
+      <workItem from="1775980728250" duration="12000" />
+      <workItem from="1776088401533" duration="8236000" />
+      <workItem from="1776157713709" duration="187000" />
+      <workItem from="1776159186986" duration="12872000" />
+      <workItem from="1776242970978" duration="2478000" />
+      <workItem from="1776321751843" duration="7096000" />
+      <workItem from="1777302458554" duration="7094000" />
+      <workItem from="1777361985256" duration="4205000" />
+      <workItem from="1777383781384" duration="5072000" />
+      <workItem from="1777403016305" duration="2072000" />
+      <workItem from="1777461785193" duration="8291000" />
+      <workItem from="1777530123765" duration="26489000" />
+      <workItem from="1777985039392" duration="8951000" />
+      <workItem from="1778225043699" duration="5801000" />
+      <workItem from="1778501488726" duration="22488000" />
+      <workItem from="1778660350449" duration="39257000" />
+      <workItem from="1779269797913" duration="763000" />
+      <workItem from="1779271018427" duration="8557000" />
+      <workItem from="1779348313514" duration="7938000" />
+      <workItem from="1782124447786" duration="3818000" />
+      <workItem from="1782212061162" duration="4011000" />
+      <workItem from="1782460279678" duration="702000" />
+      <workItem from="1782634207001" duration="7055000" />
+      <workItem from="1787992771552" duration="6524000" />
+      <workItem from="1788775119924" duration="98263000" />
+      <workItem from="1793349940044" duration="2086000" />
     </task>
     <task id="LOCAL-00001" summary="start">
       <option name="closed" value="true" />
@@ -185,19 +279,68 @@
       <option name="project" value="LOCAL" />
       <updated>1774168929108</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="start">
+      <option name="closed" value="true" />
+      <created>1774182459751</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1774182459751</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Kettosztalyos">
+      <option name="closed" value="true" />
+      <created>1787993428353</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1787993428353</updated>
+    </task>
+    <task id="LOCAL-00004" summary="harom">
+      <option name="closed" value="true" />
+      <created>1793355900313</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1793355900313</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="start" />
-    <option name="LAST_COMMIT_MESSAGE" value="start" />
+    <MESSAGE value="Kettosztalyos" />
+    <MESSAGE value="harom" />
+    <option name="LAST_COMMIT_MESSAGE" value="harom" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$prepare_database.coverage" NAME="prepare_database Coverage Results" MODIFIED="1774172806529" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluate_model.coverage" NAME="evaluate_model Coverage Results" MODIFIED="1774173277817" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$trainmodel.coverage" NAME="trainmodel Coverage Results" MODIFIED="1774172813413" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$trainmodel_three.coverage" NAME="trainmodel_three Coverage Results" MODIFIED="1777625047129" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluate_model_strict.coverage" NAME="evaluate_model_strict Coverage Results" MODIFIED="1776345405252" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$trainmodel_five.coverage" NAME="trainmodel_five Coverage Results" MODIFIED="1782198981504" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$prepare_database.coverage" NAME="prepare_database Coverage Results" MODIFIED="1782198967604" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluate_model_roc.coverage" NAME="evaluate_model_roc Coverage Results" MODIFIED="1776347314526" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$Evaluate_filter_ablation.coverage" NAME="Evaluate filter ablation Coverage Results" MODIFIED="1790410558273" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$trainmodel_seven.coverage" NAME="trainmodel_seven Coverage Results" MODIFIED="1787993846129" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluatemodel_five.coverage" NAME="evaluatemodel_five Coverage Results" MODIFIED="1782124506286" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluatemodel_three.coverage" NAME="evaluatemodel_three Coverage Results" MODIFIED="1777635507569" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluate_robustness.coverage" NAME="evaluate_robustness Coverage Results" MODIFIED="1791900822680" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluatemodel_seven.coverage" NAME="evaluatemodel_seven Coverage Results" MODIFIED="1793117690477" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$tune_treshold.coverage" NAME="tune_treshold Coverage Results" MODIFIED="1779349635270" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$evaluate_model.coverage" NAME="evaluate_model Coverage Results" MODIFIED="1777530125000" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$trainmodel.coverage" NAME="trainmodel Coverage Results" MODIFIED="1777461851971" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Kepmodositas_vizsgalata_kepzaj_alapjan$clustering_models.coverage" NAME="clustering_models Coverage Results" MODIFIED="1782212244468" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
