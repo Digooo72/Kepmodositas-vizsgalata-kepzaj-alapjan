@@ -44,13 +44,22 @@ ezért cross_val_score, GridSearchCV, joblib.dump/load mind működik velük.
     Kevésbé hajlamos overfittingre mint a standard GMM.
 
 ─── Osztályok hozzárendelése (mind a kettőnél) ─────────────────────────────────
-  Az Itier-féle feladat: "Uniform" (U=0) vs "Border" (B=1) blokkok.
-  A GMM/BayesEM önmagában felügyelet nélküli → fit() után a komponenseket
-  a tanítócímkék alapján rendeljük "Border" vagy "Uniform" osztályhoz:
-    border_rate_k = (Border-minták száma a k-adik komponensben) /
-                    (összes minta a k-adik komponensben)
-  Ha border_rate_k >= 0.5 → a k-adik komponens "Border".
-  predict_proba()[:,1] = Σ_{k: Border-komponens} γ_k(x)
+  3-OSZTÁLYOS SÉMA (checklist #1): a leképezés N osztályra általánosítva.
+  Eredetileg: "Uniform" (0) vs "Border" (1) blokkok (bináris).
+  Most: "Uniform" (0) / "Border" (1) / "Spliced" (2) — de a kód tetszőleges
+  osztályszámmal működik (self.classes_ = np.unique(y) alapján), tehát
+  visszafelé kompatibilis a 2-osztályos esettel is.
+
+  A GMM/BayesEM önmagában felügyelet nélküli → fit() után minden komponenst
+  a TÖBBSÉGI tanítócímke alapján rendelünk egy osztályhoz:
+    class_rate_k(c) = (c-osztályú minták száma a k-adik komponensben) /
+                       (összes minta a k-adik komponensben)
+  A k-adik komponens osztálya = argmax_c class_rate_k(c).
+  predict_proba()[:, c] = Σ_{k: k-adik komponens → c osztály} γ_k(x)
+
+  Megjegyzés: legalább annyi komponens kell (n_components >= osztályok száma),
+  hogy minden osztálynak juthasson legalább egy komponens — 3 osztálynál
+  ezért n_components alsó határa min. 3 legyen (lásd trainmodel_seven.py grid).
 ────────────────────────────────────────────────────────────────────────────────
 """
 
@@ -114,12 +123,14 @@ class GMMClassifier(BaseEstimator, ClassifierMixin):
         """
         1. GaussianMixture illesztése X-en (felügyelet nélkül, y nélkül).
         2. Kemény komponens-hozzárendelés a tanítóhalmazon.
-        3. Minden komponenshez Border-arány számítás → osztály-leképezés.
+        3. Minden komponenshez a TÖBBSÉGI osztály meghatározása (N-osztályos)
+           → osztály-leképezés.
         """
         X, y = check_X_y(X, y)
         X    = np.asarray(X, dtype=np.float64)
         y    = np.asarray(y, dtype=np.int32)
-        self.classes_ = np.array([0, 1])
+        self.classes_ = np.unique(y)          # pl. [0,1] vagy [0,1,2]
+        n_classes     = len(self.classes_)
 
         # ── GMM illesztés ──────────────────────────────────────────────
         self.gmm_ = GaussianMixture(
@@ -136,51 +147,59 @@ class GMMClassifier(BaseEstimator, ClassifierMixin):
         # ── Komponensek → osztályok leképezése (tanítócímkékkel) ────────
         hard_labels = self.gmm_.predict(X)   # argmax(γ_k) minden mintára
 
-        border_rates = np.zeros(self.n_components, dtype=np.float64)
+        # class_rates[k, c] = a k-adik komponensbe eső minták hány %-a c osztályú
+        class_rates = np.zeros((self.n_components, n_classes), dtype=np.float64)
         for k in range(self.n_components):
             mask = hard_labels == k
             if mask.sum() > 0:
-                border_rates[k] = np.mean(y[mask] == 1)
-            # Ha üres komponens: border_rate=0 → Uniform
+                for ci, c in enumerate(self.classes_):
+                    class_rates[k, ci] = np.mean(y[mask] == c)
+            # Ha üres komponens: minden sor 0 → a biztonsági mentés lentebb korrigál
 
-        # Border = border_rate >= 0.5
-        self.component_to_class_ = (border_rates >= 0.5).astype(np.int32)
+        # A k-adik komponens osztálya = a többségi (legmagasabb arányú) osztály
+        component_to_class_idx = np.argmax(class_rates, axis=1)
 
-        # Biztonsági mentés: ha véletlenül minden komponens azonos osztályra esne
-        if self.component_to_class_.sum() == 0:
-            # Nincs Border-komponens → a leginkább Border a legmagasabb arányú
-            self.component_to_class_[np.argmax(border_rates)] = 1
-        if self.component_to_class_.sum() == self.n_components:
-            # Minden Border → a legkevésbé Border legyen Uniform
-            self.component_to_class_[np.argmin(border_rates)] = 0
+        # Biztonsági mentés: minden osztálynak jusson legalább egy komponens
+        for ci in range(n_classes):
+            if not np.any(component_to_class_idx == ci):
+                best_k = int(np.argmax(class_rates[:, ci]))
+                component_to_class_idx[best_k] = ci
 
-        # Fő Border-komponens indexe (naplózáshoz / inspectionhoz)
-        self.border_component_ = int(np.argmax(border_rates))
-        self.border_rates_     = border_rates
+        self.component_to_class_idx_ = component_to_class_idx  # index self.classes_-be
+        self.class_rates_            = class_rates
+
+        # ── Visszafelé-kompatibilis "Border" attribútumok (naplózáshoz) ──
+        if 1 in self.classes_:
+            border_idx = int(np.where(self.classes_ == 1)[0][0])
+            self.border_rates_     = class_rates[:, border_idx]
+            self.border_component_ = int(np.argmax(self.border_rates_))
 
         return self
 
     # ------------------------------------------------------------------
     def predict_proba(self, X):
         """
-        Visszatérés: (N, 2) tömb — [:, 0] = Uniform valószínűség,
-                                   [:, 1] = Border valószínűség.
+        Visszatérés: (N, n_classes) tömb — oszloponként self.classes_ sorrendben
+        (2 osztálynál [Uniform, Border], 3-nál [Uniform, Border, Spliced]).
 
-        Border-valószínűség = az összes Border-komponens felelősségének összege:
-          P(Border | x) = Σ_{k: Border-komponens} γ_k(x)
+        P(osztály c | x) = Σ_{k: k-adik komponens → c osztály} γ_k(x)
         """
-        check_is_fitted(self, ['gmm_', 'component_to_class_'])
+        check_is_fitted(self, ['gmm_', 'component_to_class_idx_'])
         X = check_array(X)
         X = np.asarray(X, dtype=np.float64)
 
         # GMM felelősségi mátrix: shape (N, n_components)
         resp = self.gmm_.predict_proba(X)
 
-        # Összegzés a Border-komponensekre
-        border_mask  = (self.component_to_class_ == 1)
-        border_prob  = np.clip(resp[:, border_mask].sum(axis=1), 0.0, 1.0)
+        n_classes = len(self.classes_)
+        proba = np.zeros((X.shape[0], n_classes), dtype=np.float64)
+        for k in range(self.n_components):
+            ci = self.component_to_class_idx_[k]
+            proba[:, ci] += resp[:, k]
 
-        return np.column_stack([1.0 - border_prob, border_prob])
+        row_sums = proba.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1.0
+        return proba / row_sums
 
     # ------------------------------------------------------------------
     def predict(self, X):
@@ -248,12 +267,14 @@ class BayesianEMClassifier(BaseEstimator, ClassifierMixin):
         """
         1. BayesianGaussianMixture illesztése (Variational EM).
         2. Aktív komponensek azonosítása (weight > 1e-3).
-        3. Komponensek → osztályok leképezése tanítócímkékkel.
+        3. Komponensek → osztályok leképezése tanítócímkékkel (N-osztályos,
+           ugyanaz az elv, mint GMMClassifier-nél).
         """
         X, y = check_X_y(X, y)
         X    = np.asarray(X, dtype=np.float64)
         y    = np.asarray(y, dtype=np.int32)
-        self.classes_ = np.array([0, 1])
+        self.classes_ = np.unique(y)          # pl. [0,1] vagy [0,1,2]
+        n_classes     = len(self.classes_)
 
         # ── BayesianGaussianMixture paraméterösszeállítás ──────────────
         kwargs = dict(
@@ -277,42 +298,56 @@ class BayesianEMClassifier(BaseEstimator, ClassifierMixin):
         weights = self.bgmm_.weights_
         self.n_active_components_ = int(np.sum(weights > 1e-3))
 
-        # ── Komponensek → osztályok leképezése ─────────────────────────
-        hard_labels  = self.bgmm_.predict(X)
-        border_rates = np.zeros(self.n_components, dtype=np.float64)
+        # ── Komponensek → osztályok leképezése (többségi szavazat) ─────
+        hard_labels = self.bgmm_.predict(X)
+        class_rates = np.zeros((self.n_components, n_classes), dtype=np.float64)
 
         for k in range(self.n_components):
             mask = hard_labels == k
             if mask.sum() > 0:
-                border_rates[k] = np.mean(y[mask] == 1)
+                for ci, c in enumerate(self.classes_):
+                    class_rates[k, ci] = np.mean(y[mask] == c)
 
-        self.component_to_class_ = (border_rates >= 0.5).astype(np.int32)
+        component_to_class_idx = np.argmax(class_rates, axis=1)
 
-        if self.component_to_class_.sum() == 0:
-            self.component_to_class_[np.argmax(border_rates)] = 1
-        if self.component_to_class_.sum() == self.n_components:
-            self.component_to_class_[np.argmin(border_rates)] = 0
+        # Biztonsági mentés: minden osztálynak jusson legalább egy komponens
+        for ci in range(n_classes):
+            if not np.any(component_to_class_idx == ci):
+                best_k = int(np.argmax(class_rates[:, ci]))
+                component_to_class_idx[best_k] = ci
 
-        self.border_component_ = int(np.argmax(border_rates))
-        self.border_rates_     = border_rates
+        self.component_to_class_idx_ = component_to_class_idx
+        self.class_rates_            = class_rates
+
+        # ── Visszafelé-kompatibilis "Border" attribútumok (naplózáshoz) ──
+        if 1 in self.classes_:
+            border_idx = int(np.where(self.classes_ == 1)[0][0])
+            self.border_rates_     = class_rates[:, border_idx]
+            self.border_component_ = int(np.argmax(self.border_rates_))
 
         return self
 
     # ------------------------------------------------------------------
     def predict_proba(self, X):
         """
-        Variational EM felelősségi mátrix alapján:
-          P(Border | x) = Σ_{k: Border-komponens} γ_k(x)
+        Variational EM felelősségi mátrix alapján, N osztályra általánosítva:
+          P(osztály c | x) = Σ_{k: k-adik komponens → c osztály} γ_k(x)
         """
-        check_is_fitted(self, ['bgmm_', 'component_to_class_'])
+        check_is_fitted(self, ['bgmm_', 'component_to_class_idx_'])
         X = check_array(X)
         X = np.asarray(X, dtype=np.float64)
 
-        resp         = self.bgmm_.predict_proba(X)
-        border_mask  = (self.component_to_class_ == 1)
-        border_prob  = np.clip(resp[:, border_mask].sum(axis=1), 0.0, 1.0)
+        resp = self.bgmm_.predict_proba(X)
 
-        return np.column_stack([1.0 - border_prob, border_prob])
+        n_classes = len(self.classes_)
+        proba = np.zeros((X.shape[0], n_classes), dtype=np.float64)
+        for k in range(self.n_components):
+            ci = self.component_to_class_idx_[k]
+            proba[:, ci] += resp[:, k]
+
+        row_sums = proba.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1.0
+        return proba / row_sums
 
     # ------------------------------------------------------------------
     def predict(self, X):

@@ -35,13 +35,14 @@ import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
+from sklearn.cluster import KMeans
 from sklearn.neural_network import MLPClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, cross_val_score
 from sklearn.metrics import roc_curve, roc_auc_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.base import BaseEstimator, ClassifierMixin
 from itier import extract_features_from_image, load_binary_mask
-from trainmodel_three import KMeansClassifier
 from clustering_models import GMMClassifier, BayesianEMClassifier
 
 try:
@@ -51,6 +52,88 @@ except ImportError:
     XGBOOST_AVAILABLE = False
     print("Megjegyzés: xgboost nincs telepítve → sklearn GradientBoosting fallback.")
     print("Telepítés: pip install xgboost\n")
+
+
+# ---------------------------------------------------------------------------
+# K-Means wrapper — ÖNÁLLÓ, ITT DEFINIÁLVA (nem importálva trainmodel_three-ból,
+# checklist #1 kérés: minden trainmodel_X.py önmagában tartalmazza a saját
+# KMeansClassifier-ét). A GMM/BayesianEM import (clustering_models.py) marad,
+# mert az egy önálló, kifejezetten erre a két klaszterezőre épített modul —
+# nem egy "korábbi számozott" trainmodel fájl duplikátuma.
+#
+# 3-OSZTÁLYOS SÉMA: N klaszter → többségi szavazattal Uniform/Border/Spliced
+# osztályhoz rendelve (ugyanaz az elv, mint trainmodel_three.py/five.py-ban
+# és a clustering_models.py GMM/BayesianEM-jénél).
+# ---------------------------------------------------------------------------
+
+class KMeansClassifier(BaseEstimator, ClassifierMixin):
+    """K-means alapú, N-osztályos osztályozó wrapper (lásd trainmodel_three.py)."""
+
+    def __init__(self, n_clusters=6, n_init=10, max_iter=300, random_state=42):
+        self.n_clusters      = n_clusters
+        self.n_init          = n_init
+        self.max_iter        = max_iter
+        self.random_state    = random_state
+        self.kmeans_         = None
+        self.border_cluster_ = None
+
+    def fit(self, X, y):
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.int32)
+        self.classes_ = np.unique(y)
+        n_classes     = len(self.classes_)
+
+        self.kmeans_ = KMeans(n_clusters=self.n_clusters, n_init=self.n_init,
+                              max_iter=self.max_iter, random_state=self.random_state)
+        hard_labels = self.kmeans_.fit_predict(X)
+
+        class_rates = np.zeros((self.n_clusters, n_classes), dtype=np.float64)
+        for k in range(self.n_clusters):
+            mask = hard_labels == k
+            if mask.sum() > 0:
+                for ci, c in enumerate(self.classes_):
+                    class_rates[k, ci] = np.mean(y[mask] == c)
+
+        cluster_to_class_idx = np.argmax(class_rates, axis=1)
+        for ci in range(n_classes):
+            if not np.any(cluster_to_class_idx == ci):
+                best_k = int(np.argmax(class_rates[:, ci]))
+                cluster_to_class_idx[best_k] = ci
+
+        self.cluster_to_class_idx_ = cluster_to_class_idx
+        self.class_rates_          = class_rates
+
+        dists_to_own = np.min(self.kmeans_.transform(X), axis=1)
+        self._scale_ = max(float(np.mean(dists_to_own)), 1e-6)
+
+        if 1 in self.classes_:
+            border_idx = int(np.where(self.classes_ == 1)[0][0])
+            self.border_rates_   = class_rates[:, border_idx]
+            self.border_cluster_ = int(np.argmax(self.border_rates_))
+
+        return self
+
+    def predict(self, X):
+        proba = self.predict_proba(X)
+        return self.classes_[np.argmax(proba, axis=1)]
+
+    def predict_proba(self, X):
+        """Softmax "subtract-max" trükk a 0/0 NaN ellen (numerikusan stabil)."""
+        X = np.asarray(X, dtype=np.float64)
+        dists  = self.kmeans_.transform(X)
+        logits = -dists / self._scale_
+        logits -= logits.max(axis=1, keepdims=True)
+        weights = np.exp(logits)
+        weights /= weights.sum(axis=1, keepdims=True)
+
+        n_classes = len(self.classes_)
+        proba = np.zeros((X.shape[0], n_classes), dtype=np.float64)
+        for k in range(self.n_clusters):
+            ci = self.cluster_to_class_idx_[k]
+            proba[:, ci] += weights[:, k]
+        row_sums = proba.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1.0
+        return proba / row_sums
 
 
 # ============================================================
@@ -81,17 +164,27 @@ def balance_classes(X, y):
     """
     Undersampling alapú kiegyensúlyozás (Section 3.4).
 
+    3-OSZTÁLYOS SÉMA (checklist #1): tetszőleges osztályszámra
+    általánosítva (korábban csak Border(1)/Uniform(0) bináris esetre volt
+    hardcode-olva). Minden osztályt a legkisebb osztály méretére csökkent
+    (undersampling), így Uniform/Border/Spliced egyenlő arányban szerepel
+    a tanítóhalmazban — ez visszafelé kompatibilis a 2-osztályos esettel is.
+
     MEM #3: np.asarray helyett np.array — nem másol ha X már float32 tömb.
     """
     X_arr = np.asarray(X, dtype=np.float32)  # MEM #3: másolat nélkül ha float32
     y_arr = np.asarray(y, dtype=np.int32)
-    bi, ui = np.where(y_arr == 1)[0], np.where(y_arr == 0)[0]
-    mn = min(len(bi), len(ui))
+
+    classes = np.unique(y_arr)
+    class_indices = {c: np.where(y_arr == c)[0] for c in classes}
+    mn = min(len(idx) for idx in class_indices.values())
     if mn == 0:
         return np.array([], dtype=np.float32), np.array([], dtype=np.int32)
+
     np.random.seed(42)
-    idx = np.concatenate([np.random.choice(bi, mn, replace=False),
-                          np.random.choice(ui, mn, replace=False)])
+    idx = np.concatenate([
+        np.random.choice(class_indices[c], mn, replace=False) for c in classes
+    ])
     np.random.shuffle(idx)
     return X_arr[idx].copy(), y_arr[idx].copy()  # .copy() → független tömb
 
@@ -109,7 +202,9 @@ def _build_heat_map(img_path, clf, scaler, block_size=32, step=8):
     h, w = dims
     feats_sc = np.nan_to_num(
         scaler.transform(feats), nan=0.0, posinf=0.0, neginf=0.0)
-    probs = clf.predict_proba(feats_sc)[:, 1]
+    # 3-OSZTÁLYOS SÉMA: P(nem Uniform) = P(Border)+P(Spliced) = 1-P(Uniform),
+    # 2 osztálynál visszafelé kompatibilis a régi [:, 1] oszloppal.
+    probs = 1.0 - clf.predict_proba(feats_sc)[:, 0]
     hs = np.zeros((h, w), np.float32)
     hc = np.zeros((h, w), np.float32)
     for p, (y, x) in zip(probs, positions):
@@ -332,7 +427,8 @@ if __name__ == "__main__":
     del X_raw, y_raw          # MEM #1: listák felszabadítása
     gc.collect()
 
-    print(f"\nNyers → Uniform(0): {int(np.sum(y_all==0))}, Border(1): {int(np.sum(y_all==1))}")
+    print(f"\nNyers → Uniform(0): {int(np.sum(y_all==0))}, Border(1): {int(np.sum(y_all==1))}, "
+          f"Spliced(2): {int(np.sum(y_all==2))}")
     print(f"Nyers blokkok: {len(X_all):,}  →  {X_all.nbytes / 1024**2:.1f} MB (float32)")
 
     # MEM #2: Pre-balance subsample — X_all korlátoz MAX_TRAIN_BLOCKS-ra
@@ -351,7 +447,8 @@ if __name__ == "__main__":
 
     if len(X_bal) == 0:
         print("Hiba: Nincs elég adat!"); exit()
-    print(f"Kiegyensúlyozott → Uniform: {int(np.sum(y_bal==0))}, Border: {int(np.sum(y_bal==1))}")
+    print(f"Kiegyensúlyozott → Uniform: {int(np.sum(y_bal==0))}, Border: {int(np.sum(y_bal==1))}, "
+          f"Spliced: {int(np.sum(y_bal==2))}")
     print(f"Balanced méret: {X_bal.nbytes / 1024**2:.1f} MB (float32)")
 
     # MEM #5: StandardScaler → float32-re visszakonvertálás (scaler float64-et ad)
@@ -381,7 +478,7 @@ if __name__ == "__main__":
             "min_samples_leaf": [1, 5],
             "max_features":     ["sqrt", "log2"],
         },
-        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1")
+        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1_macro")
     gs_rf.fit(X_sc, y_bal)
     best_rf = gs_rf.best_estimator_
     print(f"Legjobb paraméterek: {gs_rf.best_params_}")
@@ -411,7 +508,7 @@ if __name__ == "__main__":
         SVC(probability=False, random_state=42),
         param_grid={"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"],
                     "gamma": ["scale", "auto"]},
-        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1")
+        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1_macro")
     gs_svm.fit(X_svm, y_svm)
     print(f"Legjobb SVM paraméterek: {gs_svm.best_params_}")
     print(f"CV F1 (3-fold, {svm_note}): {gs_svm.best_score_:.4f}")
@@ -429,9 +526,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 62)
     print("  [3/7] K-Means Classifier (k=2)")
     print("=" * 62)
-    km_clf = KMeansClassifier(n_init=10, max_iter=300, random_state=42)
+    km_clf = KMeansClassifier(n_clusters=6, n_init=10, max_iter=300, random_state=42)
     km_clf.fit(X_sc, y_bal)
-    cv_km = cross_val_score(km_clf, X_sc, y_bal, cv=3, scoring="f1", n_jobs=N_JOBS_CV).mean()
+    cv_km = cross_val_score(km_clf, X_sc, y_bal, cv=3, scoring="f1_macro", n_jobs=N_JOBS_CV).mean()
     print(f"Border klaszter index: {km_clf.border_cluster_}")
     print(f"CV F1 (3-fold): {cv_km:.4f}")
     joblib.dump(km_clf, "itier_kmeans_model.pkl")
@@ -466,7 +563,7 @@ if __name__ == "__main__":
             "learning_rate":      ["constant", "adaptive"],
             "batch_size":         [64, 128, 200],
         },
-        n_iter=30, cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1", random_state=42)
+        n_iter=30, cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1_macro", random_state=42)
     rs_mlp.fit(X_mlp, y_mlp)
     print(f"Legjobb MLP paraméterek: {rs_mlp.best_params_}")
     print(f"CV F1 (3-fold, {mlp_note}): {rs_mlp.best_score_:.4f}")
@@ -515,7 +612,7 @@ if __name__ == "__main__":
 
     rs_boost = RandomizedSearchCV(base_boost, param_distributions=boost_params,
                                   n_iter=20, cv=3, n_jobs=N_JOBS_CV, verbose=1,
-                                  scoring="f1", random_state=42)
+                                  scoring="f1_macro", random_state=42)
     rs_boost.fit(X_sc, y_bal)
     best_boost = rs_boost.best_estimator_
     print(f"Legjobb paraméterek: {rs_boost.best_params_}")
@@ -548,11 +645,14 @@ if __name__ == "__main__":
     gs_gmm = GridSearchCV(
         GMMClassifier(random_state=42),
         param_grid={
-            "n_components":    [2, 3, 4],
+            # 3-OSZTÁLYOS SÉMA: min. 3 komponens kell, hogy Uniform/Border/
+            # Spliced mindegyike kaphasson saját komponenst (korábban [2,3,4]
+            # volt jó a bináris esetre).
+            "n_components":    [3, 4, 6],
             "covariance_type": ["full", "tied", "diag"],
             "n_init":          [5, 10],
         },
-        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1")
+        cv=3, n_jobs=N_JOBS_CV, verbose=1, scoring="f1_macro")
     gs_gmm.fit(X_gmm, y_gmm)
     best_gmm = gs_gmm.best_estimator_
     print(f"Legjobb GMM paraméterek: {gs_gmm.best_params_}")
@@ -591,7 +691,7 @@ if __name__ == "__main__":
             "weight_concentration_prior": [None, 0.001, 0.01, 0.1, 1.0],
             "n_init":                     [1, 3],
         },
-        n_iter=10, cv=3, n_jobs=1, verbose=1, scoring="f1", random_state=42)
+        n_iter=10, cv=3, n_jobs=1, verbose=1, scoring="f1_macro", random_state=42)
     rs_em.fit(X_em, y_em)
     best_em = rs_em.best_estimator_
     print(f"Legjobb BayesianEM paraméterek: {rs_em.best_params_}")
@@ -619,7 +719,10 @@ if __name__ == "__main__":
             "cv_f1_scores":   results,
             "best_model":     max(results, key=results.get),
             "n_train":        len(train_images),
-            "n_balanced":     int(np.sum(y_bal == 0)) * 2,
+            # 3-OSZTÁLYOS SÉMA: len(y_bal) helyes tetszőleges osztályszámnál,
+            # a korábbi "* 2" csak a bináris (Uniform/Border) esetre volt jó.
+            "n_balanced":     int(len(y_bal)),
+            "n_classes":      int(len(np.unique(y_bal))),
             "max_train_blocks": MAX_TRAIN_BLOCKS,
             "n_jobs_cv":      N_JOBS_CV,
         }, f, indent=4)

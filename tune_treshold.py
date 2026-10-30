@@ -49,7 +49,9 @@ def build_heat_map(img_path, clf, scaler, block_size=32, step=8):
     h, w = dims
     feats_sc = np.nan_to_num(
         scaler.transform(feats), nan=0.0, posinf=0.0, neginf=0.0)
-    probs = clf.predict_proba(feats_sc)[:, 1]
+    # 3-OSZTÁLYOS SÉMA (checklist #1): P(nem Uniform) = P(Border)+P(Spliced)
+    # = 1 - P(Uniform). 2 osztálynál visszafelé kompatibilis a régi [:, 1]-gyel.
+    probs = 1.0 - clf.predict_proba(feats_sc)[:, 0]
 
     hs = np.zeros((h, w), np.float32)
     hc = np.zeros((h, w), np.float32)

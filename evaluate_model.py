@@ -319,7 +319,12 @@ if __name__ == "__main__":
 
         feats_scaled = scaler.transform(feats)
         feats_scaled = np.nan_to_num(feats_scaled, nan=0.0, posinf=0.0, neginf=0.0)
-        probs        = clf.predict_proba(feats_scaled)[:, 1]
+        # 3-OSZTÁLYOS SÉMA (checklist #1): P(nem Uniform) = P(Border)+P(Spliced)
+        # = 1 - P(Uniform). 2 osztálynál ez pontosan a régi [:, 1] oszloppal
+        # egyezik meg (visszafelé kompatibilis), 3 osztálynál a Border+Spliced
+        # együttes valószínűsége — ez felel meg a GT maszkok szemantikájának
+        # (minden ami nem host/background terület).
+        probs        = 1.0 - clf.predict_proba(feats_scaled)[:, 0]
 
         # Hőtérkép összerakása (átlagolt átfedő valószínűségek, Section 3.6)
         heat_sum   = np.zeros((h, w), dtype=np.float32)

@@ -36,7 +36,11 @@ from scipy.stats import ks_2samp
 from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 from itier import extract_features_from_image, load_binary_mask
 from evaluate_model import connected_components_postprocess
-from trainmodel_three import KMeansClassifier
+# 3-OSZTÁLYOS SÉMA (checklist #1): a KMeansClassifier most már
+# trainmodel_seven.py-ban van definiálva (önállóan, nem importálva
+# trainmodel_three-ból) — a pickle-elt modell unpickle-öléséhez
+# ugyanabból a modulból kell importálni, ahonnan a tanítás mentette.
+from trainmodel_seven import KMeansClassifier
 from clustering_models import GMMClassifier, BayesianEMClassifier   # [ÚJ]
 
 
@@ -54,21 +58,73 @@ GC_INTERVAL         = 10      # MEM #3: minden N képnél gc.collect()
 # Határvonal-tudatos maszk-generálás
 # ---------------------------------------------------------------------------
 
-BORDER_THRESH = 0.65
+BORDER_THRESH       = 0.72   # 0.65 -> 0.72: szigorúbb küszöb a külső glória ellen
+BORDER_ERODE_PX     = 5      # 32x32-es ablak túlnyúlásának visszavágása (4-6 px optimális)
+MIN_COMPONENT_RATIO = 0.015  # Képméret 1.5%-ánál kisebb FP foltok (pl. ikonok) törlése
+FILL_INTERNAL_HOLES = True   # Manipulált régión belüli zöld (FN) lyukak kitöltése
 
 
 def build_pred_mask(heat_map, block_size):
     """
-    Határvonal-tudatos bináris maszk a hőtérképből.
-    1. connected_components_postprocess → belső terület
-    2. bitwise_or(heat_map >= BORDER_THRESH) → peremvonal
-    3. morfológiai CLOSE → rácsos résecskék bezárása
+    Finomított, határvonal-vékonyított bináris maszk a hőtérképből:
+      1. Alapmaszk (connected_components_postprocess) + magasabb küszöbű perem (BORDER_THRESH)
+      2. Morfológiai zárás (5x5) a 8 pixeles lépésközből eredő rácshézagok összekötésére
+      3. Kis területű hamis pozitív szigetek (pl. háttértextúra, ikonok) szűrése
+      4. Belső üregek (FN lyukak) kontúralapú kitöltése
+      5. Szelektív perem-erózió (BORDER_ERODE_PX): levágja a 32x32-es blokkok
+         külső (host irányú) túlnyúlását, de a valódi képszélekhez tapadó
+         maszkot nem húzza el a kép szélétől.
     """
+    h, w = heat_map.shape[:2]
     base_mask     = connected_components_postprocess(heat_map, block_size=block_size)
     border_pixels = (heat_map >= BORDER_THRESH).astype(np.uint8) * 255
     combined      = cv2.bitwise_or(base_mask, border_pixels)
-    kernel        = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    return cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
+
+    # 1. Rácshézagok bezárása
+    k_close  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask_bin = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k_close)
+
+    # 2. Kis területű FP foltok (pl. asztali ikonok, lokális él-zajok) kiszűrése
+    if MIN_COMPONENT_RATIO > 0:
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+            mask_bin, connectivity=8)
+        if num_labels > 1:
+            areas    = stats[1:, cv2.CC_STAT_AREA]
+            max_area = int(np.max(areas))
+            min_area = max(int(h * w * MIN_COMPONENT_RATIO), int(max_area * 0.10))
+            filtered = np.zeros_like(mask_bin)
+            for lbl in range(1, num_labels):
+                if stats[lbl, cv2.CC_STAT_AREA] >= min_area:
+                    filtered[labels == lbl] = 255
+            # Biztonsági visszaesés: ha minden kiesne, megtartjuk a legnagyobb komponenst
+            if np.any(filtered):
+                mask_bin = filtered
+            else:
+                best_lbl = 1 + int(np.argmax(areas))
+                mask_bin = np.where(labels == best_lbl, 255, 0).astype(np.uint8)
+
+    # 3. Manipulált területen belüli FN lyukak kitöltése
+    if FILL_INTERNAL_HOLES:
+        contours, _ = cv2.findContours(
+            mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filled = np.zeros_like(mask_bin)
+        cv2.drawContours(filled, contours, -1, 255, thickness=cv2.FILLED)
+        mask_bin = filled
+
+    # 4. Perem-erózió a 32x32-es csúszóablak túlnyúlásának (FP glória) levágására
+    if BORDER_ERODE_PX > 0:
+        r = int(BORDER_ERODE_PX)
+        k_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+        # Pad 255-tel a külső képszéleken, hogy a kép széléig érő (pl. jobb oldali)
+        # hamisított régiót az erózió ne húzza el a kép keretétől:
+        padded = cv2.copyMakeBorder(
+            mask_bin, r, r, r, r, borderType=cv2.BORDER_CONSTANT, value=255)
+        eroded = cv2.erode(padded, k_erode, iterations=1)[r:r + h, r:r + w]
+        # Ha az erózió teljesen eltüntetne egy nagyon vékony maszkot, megtartjuk az eredetit
+        if np.any(eroded):
+            mask_bin = eroded
+
+    return mask_bin
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +481,8 @@ if __name__ == "__main__":
 
         # ── Per-modell loop ───────────────────────────────────────────────
         for model_name, model in models.items():
-            probs      = model.predict_proba(fs)[:, 1]
+            # 3-OSZTÁLYOS SÉMA: P(nem Uniform) = P(Border)+P(Spliced).
+            probs      = 1.0 - model.predict_proba(fs)[:, 0]
             heat_clean = build_heat_map_vectorized(probs, positions, h, w, block_size)
             del probs
 
@@ -501,7 +558,8 @@ if __name__ == "__main__":
 
             scores_line = []
             for model_name, model in models.items():
-                probs      = model.predict_proba(feats_sc)[:, 1]
+                # 3-OSZTÁLYOS SÉMA: P(nem Uniform) = P(Border)+P(Spliced).
+                probs      = 1.0 - model.predict_proba(feats_sc)[:, 0]
                 heat_clean = build_heat_map_vectorized(probs, positions, h, w, block_size)
                 del probs
 
@@ -605,12 +663,12 @@ if __name__ == "__main__":
 
         yr_use     = 1.0 - yr if flipped_roc[name] else yr
         y_pred_roc = np.where(np.isfinite(yr_use),
-                              (yr_use > thresh_roc[name]).astype(int), 0)
+                              (yr_use >= thresh_roc[name]).astype(int), 0)
         img_f1_roc = f1_score(yt, y_pred_roc, zero_division=1)
 
         yk_use    = 1.0 - yk if flipped_ks[name] else yk
         y_pred_ks = np.where(np.isfinite(yk_use),
-                             (yk_use > thresh_ks[name]).astype(int), 0)
+                             (yk_use >= thresh_ks[name]).astype(int), 0)
         img_f1_ks = f1_score(yt, y_pred_ks, zero_division=1)
 
         mean_pixel_f1 = float(np.mean(f1p)) if f1p else 0.0
