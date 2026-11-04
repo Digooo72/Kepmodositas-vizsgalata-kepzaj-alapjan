@@ -1,3 +1,33 @@
+"""
+itier.py
+
+Központi jellemzőkinyerő és maszkfeldolgozó könyvtár az Itier et al. (2021)
+"Color noise correlation-based splicing detection for image forensics"
+cikk módszertana alapján, kiegészítve a szakdolgozati továbbfejlesztésekkel:
+
+  1. 3-OSZTÁLYOS SÉMA (checklist #1):
+     A cikk eredeti bináris (Uniform vs. Border) blokkcímkézése helyett három
+     osztályt különböztetünk meg a GT maszk blokkon belüli aránya (beta) alapján:
+       - CLASS_UNIFORM (0): beta == 0.0        (tisztán befogadó / host háttér)
+       - CLASS_BORDER  (1): 0.4 <= beta <= 0.6 (vágási határvonal, FIX #2)
+       - CLASS_SPLICED (2): beta == 1.0        (teljesen a beillesztett régión belül)
+
+  2. SZÉTVÁLASZTHATÓ SRM SZŰRŐBANK (checklist #7):
+     Az 5 darab 5x5-ös SRM magas-passzív szűrő (HSB, VSB, RF0, RF1, RF2)
+     tetszőleges részhalmaza lekérhető a `filter_names` paraméterrel (a cikk
+     Table 1 szűrő-ablációs vizsgálatához, lásd Evaluate filter ablation.py).
+
+  3. ADATSZIVÁRGÁS-MENTESÍTÉS (FIX #1):
+     A jellemzőkinyerés nyers float32 blokkmátrixot ad vissza, nem skáláz
+     képenként. A globális StandardScaler a trainmodel_seven.py-ban illeszkedik
+     a teljes tanítóhalmazon (itier_scaler.pkl).
+
+  4. MEMÓRIABELI TÖMB-FELDOLGOZÁS (checklist #17):
+     Az `extract_features_from_array()` közvetlenül memóriában lévő RGB numpy
+     tömbből dolgozik, lehetővé téve a lemezre írás nélküli JPEG és zaj
+     robusztussági teszteket (lásd evaluate_robustness.py).
+"""
+
 import cv2
 import numpy as np
 import warnings
@@ -6,83 +36,76 @@ from sklearn.decomposition import PCA
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# ============================================================
-# 3-OSZTÁLYOS SÉMA — blokk-osztály konstansok (checklist #1)
-#   A cikk eredetileg csak Uniform/Border (2 osztály) blokkokat tanít.
-#   Itt bevezetjük a harmadik, "Spliced" osztályt: azok a blokkok, amik
-#   TELJES EGÉSZÉBEN a beillesztett (hamisított) régión belül vannak.
-#   Ez rugalmasabbá teszi a sémát: a modell nemcsak a határvonalat,
-#   hanem a hamisított terület belsejét is felismerheti.
-# ============================================================
-CLASS_UNIFORM = 0   # Homogén terület (host / background, β = 0.0)
-CLASS_BORDER  = 1   # Határvonal — host és spliced terület közötti blokk
-CLASS_SPLICED = 2   # Teljesen a beillesztett (spliced) régión belül (β = 1.0)
+# ===========================================================================
+# 1. BLOKK-OSZTÁLY KONSTANSOK (3-osztályos séma — checklist #1)
+# ===========================================================================
+CLASS_UNIFORM = 0   # Homogén terület (host / background, beta = 0.0)
+CLASS_BORDER  = 1   # Határvonal — host és spliced terület közötti blokk (beta in [0.4, 0.6])
+CLASS_SPLICED = 2   # Teljesen a beillesztett (spliced) régión belül (beta = 1.0)
 
-# ============================================================
-# JELLEMZŐKINYERÉS SZŰRŐNKÉNTI SZÉTVÁLASZTÁSA (checklist #7)
-#   A cikk Table 1-je az 5 SRM szűrőt (HSB, VSB, RF0, RF1, RF2) KÜLÖN-KÜLÖN
-#   is kiértékeli, majd a végén konkatenálva ("Concatenated" oszlop) —
-#   hogy megmutassa, melyik szűrő önmagában mennyire informatív, és hogy a
-#   kombináció jobb-e mindegyiknél külön-külön.
-#   Korábban a kód mindig azonnal konkatenálta mind az 5-öt (60 dim), nem
-#   volt kapcsoló egyetlen szűrő önálló kiértékelésére. Az alábbi
-#   ALL_FILTER_NAMES sorrend rögzíti a névhez tartozó indexet, így bármelyik
-#   függvény "filter_names" paraméterrel kérhet tetszőleges RÉSZHALMAZT
-#   (akár egyetlen szűrőt is) a névvel hivatkozva.
-# ============================================================
+# ===========================================================================
+# 2. SRM SZŰRŐK KONSTANSAI (checklist #7)
+# ===========================================================================
 ALL_FILTER_NAMES = ["HSB", "VSB", "RF0", "RF1", "RF2"]
-N_FEATURES_PER_FILTER = 12   # Eq. 3: 3 variancia + 3 ferdeség + 3 csúcsosság + 3 szög
+N_FEATURES_PER_FILTER = 12   # Cikk Eq. 3: 3 variancia + 3 ferdeség + 3 csúcsosság + 3 szög
 
 
 def get_srm_kernels():
     """
-    A cikkben szereplő 5 SRM magas-passzív szűrő (Fig. 2).
-    HSB, VBH, RF0, RF1, RF2 — változatlanul helyes.
+    Visszaadja az Itier et al. (2021) cikk 2. ábráján (Fig. 2) szereplő
+    5 darab 5x5-ös SRM (Spatial Rich Model) magas-passzív szűrőmagot.
 
-    JELLEMZŐKINYERÉS SZÉTVÁLASZTÁSA (checklist #7): a szűrők most egy
-    NÉV → kernel szótárban vannak, hogy extract_all_noise_maps() és
-    extract_features_from_image() név szerint tudjon közülük válogatni
-    (pl. csak "HSB", vagy csak ["RF1","RF2"], stb.) — nem csak az
-    összes egyszerre konkatenálva.
+    Fizikai szerepük (Cikk Section 3.2, Eq. 1: I_n = I - A):
+      Elnyomják a kép alacsony frekvenciás jelenet-tartalmát (A), és kiemelik
+      a magas frekvenciás szenzor- és utófeldolgozási zajt (I_n) mindhárom
+      RGB csatornán:
+        - HSB : 3. rendű vízszintes derivált szűrő (Cozzolino et al. [11])
+        - VSB : 3. rendű függőleges derivált szűrő (a cikk Fig. 2b-ben VBH néven)
+        - RF0 : 2. rendű, 3x3-as tartójú bidirekcionális szűrő (Zhou et al. [41])
+        - RF1 : 4. rendű, 5x5-ös izotróp magas-passzív szűrő (Zhou et al. [41])
+        - RF2 : 2. rendű vízszintes Laplace-szűrő (Zhou et al. [41])
+
+    Visszatérés:
+      dict[str, np.ndarray] : Név -> (5, 5) float32 konvolúciós mag szótár.
     """
     hsb = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 1, -3, 3, -1],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0]
+        [0,  0,  0,  0,  0],
+        [0,  0,  0,  0,  0],
+        [0,  1, -3,  3, -1],
+        [0,  0,  0,  0,  0],
+        [0,  0,  0,  0,  0]
     ], dtype=np.float32) / 3.0
 
     vsb = np.array([
-        [0, 0, 1, 0, 0],
-        [0, 0, -3, 0, 0],
-        [0, 0, 3, 0, 0],
-        [0, 0, -1, 0, 0],
-        [0, 0, 0, 0, 0]
+        [0,  0,  1,  0,  0],
+        [0,  0, -3,  0,  0],
+        [0,  0,  3,  0,  0],
+        [0,  0, -1,  0,  0],
+        [0,  0,  0,  0,  0]
     ], dtype=np.float32) / 3.0
 
     rf0 = np.array([
-        [0, 0, 0, 0, 0],
-        [0, -1, 2, -1, 0],
-        [0, 2, -4, 2, 0],
-        [0, -1, 2, -1, 0],
-        [0, 0, 0, 0, 0]
+        [0,  0,  0,  0,  0],
+        [0, -1,  2, -1,  0],
+        [0,  2, -4,  2,  0],
+        [0, -1,  2, -1,  0],
+        [0,  0,  0,  0,  0]
     ], dtype=np.float32) / 4.0
 
     rf1 = np.array([
-        [-1, 2, -2, 2, -1],
-        [2, -6, 8, -6, 2],
-        [-2, 8, -12, 8, -2],
-        [2, -6, 8, -6, 2],
-        [-1, 2, -2, 2, -1]
+        [-1,  2, -2,  2, -1],
+        [ 2, -6,  8, -6,  2],
+        [-2,  8, -12, 8, -2],
+        [ 2, -6,  8, -6,  2],
+        [-1,  2, -2,  2, -1]
     ], dtype=np.float32) / 12.0
 
     rf2 = np.array([
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 1, -2, 1, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0]
+        [0,  0,  0,  0,  0],
+        [0,  0,  0,  0,  0],
+        [0,  1, -2,  1,  0],
+        [0,  0,  0,  0,  0],
+        [0,  0,  0,  0,  0]
     ], dtype=np.float32) / 2.0
 
     return {"HSB": hsb, "VSB": vsb, "RF0": rf0, "RF1": rf1, "RF2": rf2}
@@ -90,36 +113,41 @@ def get_srm_kernels():
 
 def _resolve_filter_names(filter_names):
     """
-    Segédfüggvény: normalizálja a filter_names paramétert.
-      None            → mind az 5 szűrő (visszafelé kompatibilis, változatlan
-                         viselkedés — a régi kód mindig ezt tette)
-      "HSB"           → egyetlen szűrő (str) → [szűrő] listává alakítva
-      ["RF1","RF2"]   → tetszőleges részhalmaz, MEGŐRZI a megadott sorrendet
-    Érvénytelen névnél ValueError-t dob, hogy elgépelés esetén ne csendben
-    fusson le hibás (üres/rossz dimenziójú) jellemzőkinyerés.
+    Normalizálja és ellenőrzi a `filter_names` paramétert:
+      - None          -> mind az 5 szűrő (["HSB", "VSB", "RF0", "RF1", "RF2"])
+      - "HSB" (str)   -> egyelemű lista (["HSB"])
+      - ["RF1","RF2"] -> részhalmaz a megadott sorrend megtartásával
+
+    Hibakezelés:
+      Üres lista vagy ismeretlen szűrőnév esetén ValueError kivételt dob,
+      megelőzve a csendes, hibás dimenziójú jellemzőkinyerést.
     """
     if filter_names is None:
         return list(ALL_FILTER_NAMES)
     if isinstance(filter_names, str):
         filter_names = [filter_names]
-    unknown = [n for n in filter_names if n not in ALL_FILTER_NAMES]
+    filter_list = list(filter_names)
+    if not filter_list:
+        raise ValueError("A filter_names lista nem lehet üres!")
+    unknown = [n for n in filter_list if n not in ALL_FILTER_NAMES]
     if unknown:
         raise ValueError(
             f"Ismeretlen szűrőnév: {unknown}. Érvényes nevek: {ALL_FILTER_NAMES}")
-    return list(filter_names)
+    return filter_list
 
 
 def extract_all_noise_maps(image, filter_names=None):
     """
-    Kiszámolja a zajképeket a kiválasztott SRM szűrő(k)kel.
+    Kiszámítja a reziduális zajképeket a kiválasztott SRM szűrő(k)kel.
+    A cv2.filter2D csatornánként (R, G, B) külön-külön elvégzi a 2D konvolúciót.
 
-    filter_names : None (mind az 5, régi viselkedés) | str (egy szűrő,
-                   pl. "HSB") | list[str] (részhalmaz, pl. ["RF1","RF2"])
+    Paraméterek:
+      image        : (H, W, 3) RGB képtömb.
+      filter_names : None | str | list[str] — használandó SRM szűrők.
 
-    Visszatérés: (noise_maps, used_names) — a noise_maps lista sorrendje
-    MINDIG megegyezik used_names sorrendjével, hogy compute_block_features
-    kimenete és a végső jellemzővektor oszlopai egyértelműen megfeleltethetők
-    legyenek az egyes szűrőknek.
+    Visszatérés:
+      noise_maps : list[np.ndarray] — (H, W, 3) float32 zajtérképek listája.
+      used_names : list[str]        — a ténylegesen alkalmazott szűrőnevek.
     """
     used_names = _resolve_filter_names(filter_names)
     img_float = image.astype(np.float32)
@@ -130,18 +158,33 @@ def extract_all_noise_maps(image, filter_names=None):
 
 def compute_block_features(noise_block):
     """
-    Egy blokkból kinyeri a 12 jellemzőt (Eq. 3 a cikkből):
-      - 3 variancia  (σ²(X), σ²(Y), σ²(Z))
-      - 3 ferdeség   (γ(X),  γ(Y),  γ(Z))
-      - 3 csúcsosság (κ(X),  κ(Y),  κ(Z))
-      - 3 szögjellemző (θ(X), θ(Y), θ(Z)) — az első főtengely és az RGB tengelyek szöge
+    Egyetlen (N, N, 3) méretű zajblokkból kinyeri a 12 statisztikai és
+    geometriai jellemzőt az Itier et al. (2021) cikk Section 3.3 (Eq. 2-3) alapján:
 
-    Visszatérés: 12 elemű numpy vektor (nullvektor ha a blokk konstans)
+      1. A blokk (N*N, 3) RGB zajvektorait PCA-val (n_components=3) új,
+         ortogonális XYZ koordináta-rendszerbe transzformáljuk.
+         - Homogén blokkban (Fig. 3a) az RGB zajok erősen korreláltak ->
+           a variancia az első főtengelyre koncentrálódik.
+         - Határblokkban (Fig. 3b) két eltérő kamera zajeloszlása keveredik ->
+           a PCA szétteríti a két eloszlást, megnőnek a magasabb rendű momentumok.
+
+      2. Kinyert 12 jellemző (Eq. 3):
+         - 3 variancia    : sigma^2(X), sigma^2(Y), sigma^2(Z)  (2. centrális momentum)
+         - 3 ferdeség     : gamma(X),   gamma(Y),   gamma(Z)    (3. standardizált momentum)
+         - 3 csúcsosság   : kappa(X),   kappa(Y),   kappa(Z)    (4. standardizált momentum)
+         - 3 forgásszög   : theta(X),   theta(Y),   theta(Z)    (Eq. 2: arccos(e_d), ahol
+                            e_d az első főtengely sajátvektora az RGB térben; az sklearn
+                            PCA belső svd_flip lépése garantálja a determinisztikus előjelet).
+
+    Visszatérés:
+      (12,) alakú float64/float32 numpy vektor (nullvektor, ha a blokk konstans).
     """
     pixels = noise_block.reshape(-1, 3)
 
+    # Ha a blokk teljesen homogén (pl. szaturált fehér/fekete terület, std == 0),
+    # a kovarianciamátrix zérus -> nullvektort adunk vissza.
     if np.std(pixels) == 0:
-        return np.zeros(12)
+        return np.zeros(N_FEATURES_PER_FILTER)
 
     pca = PCA(n_components=3)
     try:
@@ -152,87 +195,77 @@ def compute_block_features(noise_block):
         sk   = np.nan_to_num(skew(transformed, axis=0, bias=False))
         kurt = np.nan_to_num(kurtosis(transformed, axis=0, bias=False))
 
-        # θ(d) = arccos(e_d) — az első főkomponens iránya az RGB térben (Eq. 2)
+        # Eq. 2: theta(d) = arccos(e(d)) — az első főkomponens iránya az RGB tengelyekhez képest
         e_d = np.clip(pca.components_[0], -1.0, 1.0)
         theta = np.arccos(e_d)
 
         return np.concatenate([var, sk, kurt, theta])
     except Exception:
-        return np.zeros(12)
+        return np.zeros(N_FEATURES_PER_FILTER)
 
 
 def load_binary_mask(mask_path):
     """
-    Betölti a maszkot és bináris képpé alakítja.
+    Betölti a Ground Truth (GT) maszkot és (H, W) uint8 bináris képpé (0 vagy 255) alakítja.
 
-    CASIA groundtruth: szürkeárnyalatos bináris maszk → egyszerű küszöbölés.
-
-    Columbia 3-osztályos maszk (piros=háttér, zöld=hamisított, kék=határvonal):
-    HSV-alapú piros háttér detekció — robusztusabb az RGB alapú megközelítésnél,
-    mert a HSV-ban a piros szín jól elkülöníthető két tartományban (0-10° és 170-180°).
-    GT = spliced régió + határvonal = minden ami NEM piros háttér.
+    Kétféle maszkformátumot kezel automatikusan:
+      1. CASIA v2.0 groundtruth (<= 4 egyedi szín):
+         Szürkeárnyalatos bináris maszk -> egyszerű küszöbölés 127-nél.
+      2. Columbia 3-osztályos színes edgemask (> 4 egyedi szín):
+         Piros = befogadó háttér (host), Zöld = beillesztett terület (spliced),
+         Kék = határvonal (border).
+         A piros hátteret HSV színtérben detektáljuk (két Hue tartományban:
+         [0-10°] és [170-180°]), ami robusztus a JPEG-tömörítési árnyalat-eltolódásokra,
+         majd negáljuk (cv2.bitwise_not), így a bináris maszkban minden, ami NEM
+         piros háttér (azaz a zöld spliced régió + kék határvonal), 255-ös értéket kap.
     """
     mask_bgr = cv2.imread(mask_path, cv2.IMREAD_COLOR)
     if mask_bgr is None:
         return None
 
-    # Ha bináris maszk (max 4 egyedi szín → fekete-fehér, CASIA típus)
+    # 1. eset: Fekete-fehér / szürkeárnyalatos bináris maszk (CASIA típus)
     unique_colors = len(np.unique(mask_bgr.reshape(-1, mask_bgr.shape[2]), axis=0))
     if unique_colors <= 4:
         gray = cv2.cvtColor(mask_bgr, cv2.COLOR_BGR2GRAY)
         _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
         return binary
 
-    # Columbia 3-osztályos maszk: HSV alapon azonosítjuk a piros hátteret.
-    # A HSV színtér előnye: a piros szín eltolódása megvilágítástól független.
-    # Piros HSV tartományok: [0-10°] és [170-180°]
+    # 2. eset: Columbia 3-osztályos színes maszk -> HSV piros háttér detekció és inverzió
     hsv = cv2.cvtColor(mask_bgr, cv2.COLOR_BGR2HSV)
     red1 = cv2.inRange(hsv, np.array([0,   50, 50]), np.array([10,  255, 255]))
     red2 = cv2.inRange(hsv, np.array([170, 50, 50]), np.array([180, 255, 255]))
     red_background = cv2.bitwise_or(red1, red2)
 
-    # GT = minden ami NEM piros háttér (spliced régió + határvonal együtt)
+    # GT = minden, ami NEM piros háttér (spliced belső régió + határvonal együtt = 255)
     binary = cv2.bitwise_not(red_background)
     return binary
+
+
 def extract_features_from_image(image_path, mask_path=None, block_size=32, step=8,
                                  filter_names=None):
     """
-    Kép jellemzőinek kinyerése csúszó ablakkal.
+    Képfájl beolvasása lemezről (BGR -> RGB konverzióval), opcionális GT maszk
+    betöltése, majd a csúszóablakos SRM-PCA jellemzőkinyerés meghívása.
 
-    FIX #1: A StandardScaler-t KIVETTÜK innen. A skálázást a trainmodel.py-ban
-             kell elvégezni a teljes tanítóhalmazon, majd menteni.
-             Lásd: trainmodel_fixed.py
-
-    FIX #2: β küszöb javítva [0.3, 0.7] → [0.4, 0.6] a cikk szerint (Section 3.4, 4.1)
-
-    3-OSZTÁLYOS SÉMA: a korábbi bináris (Uniform/Border) címkézés helyett
-    három osztályt különböztetünk meg (lásd CLASS_* konstansok):
-      CLASS_UNIFORM (0) : β == 0.0            → teljesen host/background
-      CLASS_BORDER  (1) : β ∈ [0.4, 0.6]       → határvonal (cikk szerint, változatlan)
-      CLASS_SPLICED (2) : β == 1.0            → teljesen a hamisított régión belül
-      (minden más β-érték kétértelmű részleges blokk → kihagyjuk, mint eddig)
-
-    JELLEMZŐKINYERÉS SZÉTVÁLASZTÁSA (checklist #7, ÚJ paraméter):
-      filter_names : None (alapértelmezés, mind az 5 szűrő konkatenálva,
-                     60 dim — 100% visszafelé kompatibilis a régi hívásokkal)
-                     | str, pl. "HSB" (EGYETLEN szűrő önállóan, 12 dim)
-                     | list[str], pl. ["RF1","RF2"] (részhalmaz, 12×N dim)
-                     Ezzel reprodukálható a cikk Table 1-jének ablációja:
-                     minden szűrő KÜLÖN-KÜLÖN kiértékelhető, majd a
-                     "Concatenated" (mind az 5) esettel összehasonlítható —
-                     lásd evaluate_filter_ablation.py.
+    Paraméterek:
+      image_path   : A képfájl elérési útja.
+      mask_path    : A GT maszk elérési útja (tanításkor megadva; teszteléskor None).
+      block_size   : Csúszóablak mérete pixelben (alapértelmezés: 32, cikk Section 4.1).
+      step         : Csúszóablak lépésköze pixelben (alapértelmezés: 8, cikk Section 4.1).
+      filter_names : Használandó SRM szűrők (None = mind az 5 -> 60 jellemző / blokk).
 
     Visszatérés:
-      features  : (N, 12×len(filter_names)) nyers jellemzőmátrix
-                  (alapértelmezésben 60 = 5 szűrő × 12 jellemző)
-      labels    : (N,) tömb {0,1,2} értékekkel (Uniform/Border/Spliced), vagy None ha nincs maszk
-      positions : lista (y, x) pozíciókkal
-      (h, w)    : kép mérete
+      features  : (N, 12 * len(filter_names)) float32 nyers jellemzőmátrix.
+      labels    : (N,) int32 tömb {0, 1, 2} címkékkel, vagy None ha mask_path=None.
+      positions : list[(y, x)] — a blokkok bal felső sarkának koordinátái.
+      (h, w)    : A kép magassága és szélessége pixelben.
     """
     img = cv2.imread(image_path)
     if img is None:
         return None, None, None, None
 
+    # FONTOS: Az OpenCV BGR sorrendben olvas be, a cikk (és a PCA szögjellemzők)
+    # viszont RGB színteret várnak.
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     binary_mask = None
@@ -247,41 +280,56 @@ def extract_features_from_image(image_path, mask_path=None, block_size=32, step=
 def extract_features_from_array(img_rgb, binary_mask=None, block_size=32, step=8,
                                  filter_names=None):
     """
-    ROBUSZTUSSÁGI VIZSGÁLAT (checklist #17, ÚJ függvény): ugyanaz a blokk-
-    feldolgozó logika, mint extract_features_from_image()-ben, de már egy
-    MEMÓRIÁBAN LÉVŐ RGB képtömbből indul, fájlba írás/visszaolvasás nélkül.
+    Közös csúszóablakos SRM-PCA jellemzőkinyerő függvény, amely közvetlenül
+    memóriában lévő (H, W, 3) RGB képtömbből dolgozik (checklist #17).
 
-    Ez teszi lehetővé, hogy pl. egy JPEG-újratömörített vagy zajjal terhelt
-    kép variánsát közvetlenül, lemez-kerülővel lehessen feldolgozni — lásd
-    evaluate_robustness.py: apply_jpeg_compression()/apply_uniform_noise()
-    a cv2.imencode/imdecode-dal memóriában állítja elő a torzított képet,
-    majd ezt a függvényt hívja rá.
-
-    extract_features_from_image() maga is ezt hívja a lemezről beolvasott
-    kép feldolgozásához — tehát ez a KÖZÖS, egyetlen implementáció, nincs
-    kódduplikáció a két belépési pont között.
-
-    Paraméterek:
-      img_rgb      : (H, W, 3) uint8 RGB kép (NEM BGR — a hívó felelőssége
-                     a színcsatorna-sorrend biztosítása, ahogy
-                     extract_features_from_image is cvtColor-oz hívás előtt)
-      binary_mask  : (H, W) bináris maszk (255=hamisított) vagy None
-                     (None → nincs címkézés, csak jellemzők, mint egy
-                     authentic/maszk nélküli képnél)
-      block_size, step, filter_names : ugyanaz, mint extract_features_from_image-nél
-
-    Visszatérés: ugyanaz a négyes, mint extract_features_from_image().
+    Főbb jellemzők és optimalizációk:
+      - 3-OSZTÁLYOS CÍMKÉZÉS (checklist #1 + FIX #2):
+          beta == 0.0        -> CLASS_UNIFORM (0)
+          0.4 <= beta <= 0.6 -> CLASS_BORDER  (1)
+          beta == 1.0        -> CLASS_SPLICED (2)
+          Minden más köztes beta értékű blokkot kihagyunk a tanításból.
+      - FUTÁSIDŐ-OPTIMALIZÁCIÓ:
+          Ha `binary_mask` meg van adva (tanítási fázis), először a gyors beta
+          arányt számoljuk ki, és a kihagyandó (köztes) blokkoknál azonnal
+          továbblépünk (`continue`), így nem fut le rájuk feleslegesen az 5xPCA!
+      - ADATSZIVÁRGÁS-MENTESÍTÉS (FIX #1):
+          Nem alkalmazunk képenkénti StandardScaler-t; a skálázást globálisan
+          a trainmodel_seven.py végzi.
     """
     noise_maps, used_names = extract_all_noise_maps(img_rgb, filter_names=filter_names)
     n_dim = N_FEATURES_PER_FILTER * len(used_names)
     h, w = img_rgb.shape[:2]
+    block_area = float(block_size * block_size)
+
+    # Biztonsági méretegyeztetés: ha a maszk mérete eltérne a képétől, átméretezzük
+    if binary_mask is not None and binary_mask.shape[:2] != (h, w):
+        binary_mask = cv2.resize(binary_mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
     features, labels, positions = [], [], []
 
     for y in range(0, h - block_size + 1, step):
         for x in range(0, w - block_size + 1, step):
-            block_feature_vector = []
+            # --- 1. Ha van GT maszk (tanítás), először címkézzük a blokkot ---
+            if binary_mask is not None:
+                mask_block = binary_mask[y:y + block_size, x:x + block_size]
+                beta = np.sum(mask_block == 255) / block_area
 
+                # FIX #2 + 3-OSZTÁLYOS SÉMA:
+                if 0.4 <= beta <= 0.6:
+                    lbl = CLASS_BORDER     # Határvonal (host és spliced keveréke)
+                elif beta == 0.0:
+                    lbl = CLASS_UNIFORM    # Homogén (host) háttérterület
+                elif beta == 1.0:
+                    lbl = CLASS_SPLICED    # Teljesen a beillesztett régión belül
+                else:
+                    # Részlegesen érintett, kétértelmű blokk -> PCA nélkül kihagyjuk!
+                    continue
+
+                labels.append(lbl)
+
+            # --- 2. PCA alapú 12D jellemzők kinyerése minden kiválasztott szűrőre ---
+            block_feature_vector = []
             for noise_img in noise_maps:
                 noise_block = noise_img[y:y + block_size, x:x + block_size]
                 feat12 = compute_block_features(noise_block)
@@ -290,35 +338,19 @@ def extract_features_from_array(img_rgb, binary_mask=None, block_size=32, step=8
             features.append(block_feature_vector)
             positions.append((y, x))
 
-            if binary_mask is not None:
-                mask_block = binary_mask[y:y + block_size, x:x + block_size]
-                beta = np.sum(mask_block == 255) / (block_size * block_size)
-
-                # FIX #2 + 3-OSZTÁLYOS SÉMA: β ∈ [0.4, 0.6] → "Border" (változatlan),
-                # β == 0.0 → "Uniform", β == 1.0 → ÚJ "Spliced" osztály.
-                if 0.4 <= beta <= 0.6:
-                    labels.append(CLASS_BORDER)    # Határvonal
-                elif beta == 0.0:
-                    labels.append(CLASS_UNIFORM)   # Homogén (host) terület
-                elif beta == 1.0:
-                    labels.append(CLASS_SPLICED)   # Teljesen a hamisított régión belül
-                else:
-                    # Részlegesen érintett, de nem egyértelműen egyik osztályba
-                    # sem eső blokk — kihagyjuk (mint eddig)
-                    features.pop()
-                    positions.pop()
-
     if features:
         features = np.array(features, dtype=np.float32)
     else:
-        # Üres kép/nincs blokk esetén is helyes (N_dim oszlopos) alakú tömböt
-        # adjunk vissza, ne (0,)-t — így a hívó kód vstack-je nem törik el
-        # akkor sem, ha az adott szűrő-részhalmazzal 0 blokk keletkezett.
+        # Üres kép / 0 érvényes blokk esetén is megtartjuk a helyes (0, n_dim) alakot,
+        # hogy a hívó oldali np.vstack ne törjön el.
         features = np.zeros((0, n_dim), dtype=np.float32)
-    # NaN/Inf csere nullával (degenerate blokkok: teljesen egyszínű, nulla variancia)
+
+    # NaN / Inf csere nullával (degenerált, teljesen egyszínű blokkok védelme)
     features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
 
-    # FONTOS: NEM standardizálunk itt! A scaler a trainmodel_fixed.py-ban kerül
-    # illesztésre és mentésre, majd evaluate_model_fixed.py-ban betöltésre.
-
-    return features, np.array(labels, dtype=np.int32) if binary_mask is not None else None, positions, (h, w)
+    return (
+        features,
+        np.array(labels, dtype=np.int32) if binary_mask is not None else None,
+        positions,
+        (h, w),
+    )

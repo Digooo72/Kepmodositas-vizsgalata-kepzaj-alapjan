@@ -1,9 +1,10 @@
 """
 evaluate_robustness.py
 
-CHECKLIST #17 — Képzajalapú képmódosítás-vizsgálatok (robusztusság)
-=====================================================================
-A cikk (Itier et al., 2021) Section 4.1 utolsó kísérletének reprodukciója:
+CHECKLIST #17 — Képzajalapú képmódosítás-vizsgálatok (Ellen-forenzikus robusztusság)
+======================================================================================
+Az Itier et al. (2021) cikk Section 4.1 utolsó kísérletének reprodukciója és
+kiterjesztése a teljes 7-modelles keretrendszerre:
 
   "We also performed the classification task after JPEG compression of the
    test dataset (4 folds) in the 5-fold cross-validation. We used standard
@@ -16,42 +17,31 @@ A cikk (Itier et al., 2021) Section 4.1 utolsó kísérletének reprodukciója:
    happens with other counter-attacks such as uniform noise addition
    strong enough to cover the intrinsic noise in the spliced image."
 
-Két támadás-típust szimulál a MÁR BETANÍTOTT modelleken (nem tanít újra):
-  1. JPEG újratömörítés csökkenő minőségi faktorral (QF = 100→30)
-  2. Egyenletes (uniform) zaj hozzáadása növekvő amplitúdóval
-     (a cikk ezt csak kvalitatívan említi, konkrét görbét nem közöl rá —
-     itt egy ésszerű amplitúdó-tartományt választottunk kiegészítésként)
+─── Vizsgált ellen-forenzikus támadások (Counter-Attacks) ───────────────────────
+  1. JPEG újratömörítés csökkenő minőségi faktorral:
+     QF = [100, 90, 75, 50, 30] — memóriában (cv2.imencode / cv2.imdecode),
+     felesleges lemezre írás nélkül.
 
-MÓDSZERTANI DÖNTÉS (fontos!): a küszöböt EGYETLEN alkalommal, a TISZTA
-(QF=100, zaj=0) alapfutáson határozzuk meg és RÖGZÍTJÜK — minden további,
-torzított szinten EZT a fix küszöböt alkalmazzuk, nem számoljuk újra.
-Ez felel meg a "támadás" (counter-attack) fogalmának: egy már KALIBRÁLT,
-éles detektort tesztelünk azzal, hogy mennyire esik vissza a teljesítménye,
-ha valaki utólag JPEG-be tömöríti vagy zajjal terheli a képet — nem pedig
-azt vizsgáljuk, hogy egy MINDIG ÚJRAKALIBRÁLT detektor meddig tartja magát
-(az utóbbi szisztematikusan alábecsülné a valódi teljesítményvesztést).
+  2. Additív egyenletes (uniform) zaj növekvő amplitúdóval:
+     amp = [0, 0.5, 1, 2, 3, 5, 10, 20] — két különböző fizikai üzemmódban:
+       - "independent" : csatornánként független (H, W, 3) zaj, amely közvetlenül
+                         szétrombolja az RGB csatornák közötti korrelációt.
+       - "correlated"  : mindhárom csatornán azonos (H, W, 1) zaj, amely megtartja
+                         a csatornaközi korrelációt, csak a zajenergiát növeli.
+     Tudományos jelentőség: a két zajmód összevetése közvetlenül bizonyítja, hogy
+     a modellek nem a zaj intenzitására, hanem az RGB csatornák közötti
+     korreláció megbomlására érzékenyek.
 
-KIBŐVÍTÉS (az első valós futtatás tanulságai alapján):
-  - Finomabb zaj-rács (0.5, 1, 2, 3, 5 ...): az első futtatásban már amp=5-nél
-    összeomlott a detektor, a valódi átmenet a 0-5 tartományban van.
-  - Zaj-variáns "correlated": UGYANAZ a zaj kerül mindhárom csatornára, így
-    megmarad a csatornák közti korreláció — az "independent" (csatornánként
-    független) zajjal összevetve szétválasztható, mennyit számít a zaj
-    energiája, és mennyit a csatornakorreláció romlása.
-  - Diagnosztika: szintenként kiírja az átlagos KS-értéket spliced és
-    authentic képekre, valamint a fix küszöb által "hamisítottnak" jelölt
-    képek arányát. F1=0 ilyenkor értelmezhető: ha a KS lecsúszik a küszöb
-    alá, a detektor "vak" (nem jelez semmit), nem rossz irányba téved.
-
-Ez a szkript ÖNÁLLÓ, nem importál semmit evaluatemodel_seven.py-ból (a
-projekt eddigi konvenciója szerint minden evaluate_*.py fájl önmagában
-értelmezhető) — a szükséges kis segédfüggvényeket (compute_ks_score,
-build_heat_map_vectorized, is_spliced_image, find_authentic_images,
-load_models) saját maga tartalmazza, ugyanazzal a logikával, mint
-evaluatemodel_seven.py.
+─── "Anti-Oracle" rögzített küszöbprotokoll ─────────────────────────────────────
+  A képszintű döntési küszöböt (t_roc és t_ks) KIZÁRÓLAG EGYSZER, a torzítatlan
+  alapfutáson (QF=100, zaj=0) határozzuk meg és rögzítjük. Minden további
+  torzítási szinten ezt a fix küszöböt alkalmazzuk, így valós támadási helyzetet
+  szimulálunk (nem kalibráljuk újra a detektort a támadó paramétereire).
+────────────────────────────────────────────────────────────────────────────────
 """
 
 import os
+import gc
 import json
 import joblib
 import cv2
@@ -60,53 +50,54 @@ from scipy.stats import ks_2samp
 from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 
 from itier import extract_features_from_array, load_binary_mask
-# 3-OSZTÁLYOS SÉMA (checklist #1): a KMeansClassifier trainmodel_seven.py-ban
-# van definiálva (önállóan) — a pickle-elt modell unpickle-öléséhez innen
-# kell importálni, ugyanúgy, mint evaluatemodel_seven.py-ban.
+# 3-OSZTÁLYOS SÉMA (checklist #1): a KMeansClassifier a trainmodel_seven.py-ban,
+# a GMMClassifier és BayesianEMClassifier pedig a clustering_models.py-ban van
+# definiálva — a pickle-elt modellek betöltéséhez innen importáljuk őket.
 from trainmodel_seven import KMeansClassifier
 from clustering_models import GMMClassifier, BayesianEMClassifier
 
-# ============================================================
+# ===========================================================================
 # KONFIGURÁCIÓ
-# ============================================================
-BLOCK_SIZE = 32
-STEP       = 8
+# ===========================================================================
+BLOCK_SIZE = 32   # Csúszóablak mérete (32x32 pixel, Cikk Section 4.1)
+STEP       = 8    # Csúszóablak lépésköze (8 pixel, Cikk Section 4.1)
 
-# None = minden betöltött modellt tesztel; pl. ["RFC"] a cikkel egyező,
-# gyorsabb, egy-modelles futtatáshoz.
+# None = minden betöltött modellt tesztel; pl. ["RFC"] = gyors, egymodelles futás
 MODELS_TO_TEST = None
 
-# QF=100 a "kontroll" (nincs újratömörítés) — ehhez képest mérjük a visszaesést.
-# A cikk konkrétan a 75%-ot és 50%-ot közli; itt egy teljesebb görbét adunk.
+# JPEG minőségi faktorok (QF=100 a torzítatlan kontroll)
 JPEG_QUALITIES = [100, 90, 75, 50, 30]
+RUN_JPEG       = True   # False = a JPEG-görbét kihagyja
 
-RUN_JPEG = True    # False = a JPEG-görbét kihagyja (gyorsabb futás)
-
-# Egyenletes zaj [-amplitúdó, +amplitúdó] tartományból, pixelenként.
-# 0 = kontroll (nincs zaj hozzáadva). Az első futtatásban 5 felett minden
-# modell már 0 volt, ezért a rács most a 0-5 tartományt sűríti.
+# Egyenletes zaj [-amplitude, +amplitude] tartományból (0 = torzítatlan kontroll)
 NOISE_AMPLITUDES = [0, 0.5, 1, 2, 3, 5, 10, 20]
 
-# "independent": csatornánként független zaj (a korrelációt is rontja)
-# "correlated" : ugyanaz a zaj mindhárom csatornán (a korrelációt megtartja)
-# Futásidő: minden mód + szint egy teljes kép-átfutás; gyorsításhoz
-# elég ["independent"], vagy rövidebb NOISE_AMPLITUDES lista.
+# Zajmódok:
+#   "independent" : csatornánként független zaj (lerombolja az RGB korrelációt)
+#   "correlated"  : azonos zaj mindhárom RGB csatornán (megtartja a korrelációt)
 NOISE_MODES = ["independent", "correlated"]
 
-MAX_TEST_IMAGES = 60   # None = az összes; kis szám = gyors próbafuttatás
-MAX_AUTH_IMAGES = 20   # None = az összes elérhető 4cam_auth/Au kép
-RANDOM_SEED     = 42
+MAX_TEST_IMAGES = 60   # None = összes tesztkép; 60 = teljes 45 képes Columbia test split
+MAX_AUTH_IMAGES = 20   # Hiteles képek száma a robusztussági görbéhez
+RANDOM_SEED     = 42   # Reprodukálhatósági magérték
+# ===========================================================================
 
 
 # ---------------------------------------------------------------------------
-# Támadás-szimulátorok
+# Ellen-forenzikus támadás-szimulátorok (memóriában, lemez-I/O nélkül)
 # ---------------------------------------------------------------------------
 
 def apply_jpeg_compression(img_rgb, quality):
     """
-    JPEG újratömörítés memóriában (lemezre írás nélkül): encode majd decode.
-    quality=100 esetén (kontroll) az eredeti képet adja vissza változatlanul
-    (nem futtat felesleges tömörítést).
+    JPEG újratömörítés memóriában (cv2.imencode -> cv2.imdecode).
+    quality >= 100 esetén (kontroll) az eredeti képet adja vissza változatlanul.
+
+    Módszertani megjegyzés (OpenCV 4:2:0 vs. Cikk 4:2:2):
+      A cikk Section 4.1 fejezete 4:2:2 chroma subsamplinget említ, míg az OpenCV
+      cv2.imencode alapértelmezésben 4:2:0 szubmintavételezést alkalmaz (vízszintesen
+      és függőlegesen is felezi a Cb/Cr színcsatornák felbontását). Ez szigorúbb
+      ellen-forenzikus teszt, mivel a 4:2:0 erősebben mossa össze a magas
+      frekvenciás RGB színzaj-korrelációt.
     """
     if quality >= 100:
         return img_rgb.copy()
@@ -120,33 +111,36 @@ def apply_jpeg_compression(img_rgb, quality):
 
 def apply_uniform_noise(img_rgb, amplitude, rng, correlated=False):
     """
-    Egyenletes zaj [-amplitude, +amplitude] tartományból, csatornánként
-    független mintavétellel (ez FÜGGETLEN zajt ad minden RGB csatornára,
-    tehát pontosan azt a fajta zaj-korreláció-rombolást szimulálja, amit a
-    cikk módszere elméletileg detektálna — jó "stressz-teszt" arra nézve,
-    hogy mekkora külső zaj tudja már elfedni a splicing intrinzik jelét).
-    amplitude=0 esetén (kontroll) az eredeti képet adja vissza.
+    Additív egyenletes (uniform) zaj [-amplitude, +amplitude] tartományból.
+      - correlated=False ("independent"): (H, W, 3) alakú független zaj minden
+        RGB csatornára -> közvetlenül rontja a csatornaközi zajkorrelációt.
+      - correlated=True  ("correlated"):  (H, W, 1) alakú zaj, amely mindhárom
+        csatornára azonos értékkel adódik hozzá -> a csatornák közötti korreláció
+        megmarad, csupán a zaj energiája nő.
 
-    correlated=True: egyetlen (H, W, 1) zajmintát használ, ami mindhárom
-    csatornára UGYANAZ — a csatornák közti korreláció megmarad (csak a
-    zaj energiája nő), ellentétben az alapértelmezett független zajjal.
+    NUMERIKUS HIBAJAVÍTÁS (np.rint):
+      A közvetlen `.astype(np.uint8)` csonkolást (truncation towards zero) végez,
+      ami miatt kis amplitúdóknál (pl. amp=0.5 és amp=1.0) minden pozitív törtzajból
+      0, minden negatív törtzajból -1 lenne (így amp=0.5 és amp=1.0 pontosan
+      ugyanazt a uint8 képet adná). Az `np.rint(noisy)` szimmetrikus matematikai
+      kerekítést végez a [0, 255] vágás előtt:
+        - amp=0.5 esetén [-0.5, +0.5] -> csak a kerekítési határon változtat
+        - amp=1.0 esetén [-1.0, +1.0] -> valódi {-1, 0, +1} perturbációt ad.
     """
     if amplitude <= 0:
         return img_rgb.copy()
     shape = img_rgb.shape[:2] + (1,) if correlated else img_rgb.shape
     noise = rng.uniform(-amplitude, amplitude, shape).astype(np.float32)
     noisy = img_rgb.astype(np.float32) + noise
-    return np.clip(noisy, 0, 255).astype(np.uint8)
+    return np.clip(np.rint(noisy), 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------------------
-# Kisegítő függvények (önálló másolat, ugyanaz a logika, mint
-# evaluatemodel_seven.py-ban — a checklist #1 kérésének megfelelően minden
-# evaluate_*.py fájl önmagában értelmezhető, nem importál másik evaluate
-# fájlból)
+# Segédfüggvények (önálló definíciók a modul függetlenségéhez)
 # ---------------------------------------------------------------------------
 
 def is_spliced_image(img_path):
+    """Azonosítja, hogy a kép hamisított-e (Columbia 4cam_splc vagy CASIA Tp_)."""
     lower, basename = img_path.lower(), os.path.basename(img_path)
     columbia = "4cam_splc" in lower and "edgemask" not in lower
     casia    = ((os.sep + "tp" + os.sep) in lower or "/tp/" in lower) \
@@ -155,6 +149,7 @@ def is_spliced_image(img_path):
 
 
 def find_authentic_images(max_count=None):
+    """Hiteles (authentic) képek összegyűjtése a 4cam_auth/ és Au/ könyvtárakból."""
     files = []
     for d in ["4cam_auth", "Au"]:
         if os.path.exists(d):
@@ -169,9 +164,11 @@ def find_authentic_images(max_count=None):
 
 
 def compute_ks_score(heat_map, h, w, mask_binary=None):
-    """max|C(S)-C(H)| — ugyanaz, mint evaluatemodel_seven.py compute_ks_score-ja.
-    Authentic képnél (mask_binary=None) a cikk szerinti középső-négyzet
-    szintetikus GT-t használja."""
+    """
+    Kétmintás Kolmogorov-Smirnov statisztika: max|C(S) - C(H)| (Cikk Eq. 8).
+    Authentic képnél (mask_binary=None) a középső negyed négyzetet használja
+    szintetikus GT maszkként (Zampoglou et al. [40]).
+    """
     if mask_binary is not None:
         S_mask = mask_binary > 127
     else:
@@ -189,6 +186,7 @@ def compute_ks_score(heat_map, h, w, mask_binary=None):
 
 
 def build_heat_map_vectorized(probs, positions, h, w, block_size):
+    """Vektorizált hőtérkép-felépítés az átfedő (32x32, step=8) ablakokból."""
     hs = np.zeros((h, w), np.float32)
     hc = np.zeros((h, w), np.float32)
     bs = block_size
@@ -200,7 +198,7 @@ def build_heat_map_vectorized(probs, positions, h, w, block_size):
 
 
 def load_models(scaler_path="itier_scaler.pkl"):
-    """Ugyanaz, mint evaluatemodel_seven.py load_models()-je."""
+    """Betölti a globális StandardScalert és a 7 betanított modellt."""
     if not os.path.exists(scaler_path):
         raise FileNotFoundError(f"Scaler nem található: {scaler_path}")
     scaler = joblib.load(scaler_path)
@@ -220,9 +218,10 @@ def load_models(scaler_path="itier_scaler.pkl"):
         model_files[lines[0]] = lines[1]
     else:
         for fname, key in [("itier_xgb_model.pkl", "XGBoost"),
-                            ("itier_gb_model.pkl",  "GradientBoosting")]:
+                           ("itier_gb_model.pkl",  "GradientBoosting")]:
             if os.path.exists(fname):
-                model_files[key] = fname; break
+                model_files[key] = fname
+                break
 
     for name, path in model_files.items():
         if os.path.exists(path):
@@ -237,16 +236,14 @@ def load_models(scaler_path="itier_scaler.pkl"):
 
 
 # ---------------------------------------------------------------------------
-# Egy adott támadás-szint (pl. QF=75 vagy zaj-amplitúdó=20) teljes
-# kiértékelése minden képre és minden modellre
+# Képszintű pontozás és támadási szintek kiértékelése
 # ---------------------------------------------------------------------------
 
 def score_image(img_rgb, scaler, models, block_size=32, step=8):
     """
-    Egyetlen (már betöltött/torzított) képre kiszámolja mind a max_p, mind
-    a KS pontszámot minden modellre. Visszatérés: {model_name: (max_p, heat_map, positions, dims)}
-    — a heat_map-et is visszaadjuk, mert a KS-számításhoz a GT maszk (ha
-    van) is kell, amit a hívó tud hozzárendelni.
+    Egyetlen (memóriában lévő, esetleg már torzított) RGB képre kinyeri a
+    blokkjellemzőket (egyszer), majd mind a 7 modellre kiszámítja a hőtérképet
+    és a max_p értéket.
     """
     feats, _, positions, dims = extract_features_from_array(
         img_rgb, binary_mask=None, block_size=block_size, step=step)
@@ -255,22 +252,25 @@ def score_image(img_rgb, scaler, models, block_size=32, step=8):
 
     h, w = dims
     fs = np.nan_to_num(scaler.transform(feats), nan=0.0, posinf=0.0, neginf=0.0)
+    del feats
 
     out = {}
     for model_name, model in models.items():
-        probs = 1.0 - model.predict_proba(fs)[:, 0]   # P(nem Uniform), N-osztályos-biztos
+        # 3-OSZTÁLYOS SÉMA: P(nem Uniform) = 1 - P(Uniform) = P(Border) + P(Spliced)
+        probs = 1.0 - model.predict_proba(fs)[:, 0]
         heat  = build_heat_map_vectorized(probs, positions, h, w, block_size)
         max_p = float(np.nanmax(heat)) if np.any(np.isfinite(heat)) else float("nan")
         out[model_name] = (max_p, heat)
+    del fs
     return out, (h, w)
 
 
 def evaluate_attack_level(attack_fn, label, images_with_masks, auth_images,
-                           scaler, models, block_size=32, step=8):
+                          scaler, models, block_size=32, step=8):
     """
-    Végigfut az összes (spliced + authentic) képen EGY adott torzítási
-    szinttel, és összegyűjti modellenként a képszintű max_p/ks score-okat +
-    a valós (spliced/authentic) címkét.
+    Végigfut az összes (spliced + authentic) tesztképen egy adott torzítási
+    függvénnyel (`attack_fn`), és összegyűjti modellenként a képszintű
+    ROC (max_p) és KS pontszámokat.
     """
     print(f"\n  --- Támadás: {label} ---")
     y_true = {name: [] for name in models}
@@ -280,10 +280,12 @@ def evaluate_attack_level(attack_fn, label, images_with_masks, auth_images,
     n_total = len(images_with_masks) + len(auth_images)
     done = 0
 
+    # --- 1. Spliced (hamisított) képek ---
     for img_p, mask_p in images_with_masks:
         bgr = cv2.imread(img_p)
         if bgr is None:
-            done += 1; continue
+            done += 1
+            continue
         img_rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         img_attacked = attack_fn(img_rgb)
 
@@ -302,13 +304,16 @@ def evaluate_attack_level(attack_fn, label, images_with_masks, auth_images,
             y_roc[name].append(max_p)
             y_ks[name].append(ks)
 
+        del model_scores
         if done % 20 == 0:
-            print(f"    {done}/{n_total}")
+            print(f"    feldolgozva: {done}/{n_total}")
 
+    # --- 2. Authentic (hiteles) képek ---
     for img_p in auth_images:
         bgr = cv2.imread(img_p)
         if bgr is None:
-            done += 1; continue
+            done += 1
+            continue
         img_rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         img_attacked = attack_fn(img_rgb)
 
@@ -324,55 +329,70 @@ def evaluate_attack_level(attack_fn, label, images_with_masks, auth_images,
             y_roc[name].append(max_p)
             y_ks[name].append(ks)
 
+        del model_scores
         if done % 20 == 0:
-            print(f"    {done}/{n_total}")
+            print(f"    feldolgozva: {done}/{n_total}")
 
+    gc.collect()
     return y_true, y_roc, y_ks
 
 
 def get_optimal_roc_threshold(y_true, y_scores):
-    """ROC L2-optimum, a mesterséges (0,0)/inf pont kizárva (lásd
-    evaluate_filter_ablation.py — ugyanaz a hibajavítás itt is szükséges,
-    hogy a küszöb sose ragadjon a triviális "utasíts el mindent" pontra)."""
-    fpr, tpr, thr = roc_curve(y_true, y_scores)
+    """
+    ROC L2-optimális küszöb a tiszta alapfutáson, a mesterséges (0,0)/+inf
+    kezdőpont kizárásával és NaN-szűréssel.
+    """
+    yt = np.asarray(y_true)
+    ys = np.asarray(y_scores, dtype=float)
+    valid = np.isfinite(ys)
+    if not np.any(valid) or len(np.unique(yt[valid])) < 2:
+        return 0.5
+    fpr, tpr, thr = roc_curve(yt[valid], ys[valid])
     if len(thr) > 1:
         fpr, tpr, thr = fpr[1:], tpr[1:], thr[1:]
-    dist = np.sqrt(fpr**2 + (1 - tpr)**2)
+    dist = np.sqrt(fpr**2 + (1.0 - tpr)**2)
     return float(thr[np.argmin(dist)])
 
 
-# ---------------------------------------------------------------------------
-# Fő futtatás
-# ---------------------------------------------------------------------------
-
 def level_metrics(yt, yroc, yks, t_roc, t_ks):
-    """Egy modell egy torzítási szintjének metrikái a RÖGZÍTETT küszöbökkel,
-    plusz diagnosztika (átlagos pontszámok, jelölt képek aránya)."""
-    yt  = np.asarray(yt)
-    yr  = np.asarray(yroc, dtype=float)
-    yk  = np.asarray(yks,  dtype=float)
-    pred_roc = (yr >= t_roc).astype(int)
-    pred_ks  = (yk >= t_ks).astype(int)
-    spl, aut = yt == 1, yt == 0
+    """
+    Kiszámítja egy modell egy adott torzítási szinthez tartozó F1-értékeit
+    a RÖGZÍTETT (alapfutáson kalibrált) t_roc és t_ks küszöbökkel, valamint
+    a diagnosztikai átlagokat (spliced vs. authentic átlagos KS és max_p).
+    """
+    yt = np.asarray(yt)
+    yr = np.asarray(yroc, dtype=float)
+    yk = np.asarray(yks,  dtype=float)
+
+    pred_roc = np.where(np.isfinite(yr), (yr >= t_roc).astype(int), 0)
+    pred_ks  = np.where(np.isfinite(yk), (yk >= t_ks).astype(int), 0)
+    spl, aut = (yt == 1), (yt == 0)
 
     def mean_of(a, mask):
-        return float(np.nanmean(a[mask])) if mask.any() else float("nan")
+        return float(np.nanmean(a[mask])) if np.any(mask) else float("nan")
 
     return dict(
-        f1_roc=f1_score(yt, pred_roc, zero_division=0),
-        f1_ks=f1_score(yt, pred_ks, zero_division=0),
-        ks_mean_spliced=mean_of(yk, spl), ks_mean_authentic=mean_of(yk, aut),
-        maxp_mean_spliced=mean_of(yr, spl), maxp_mean_authentic=mean_of(yr, aut),
-        flagged_ks=float(pred_ks.mean()), flagged_roc=float(pred_roc.mean()),
+        f1_roc=float(f1_score(yt, pred_roc, zero_division=0)),
+        f1_ks=float(f1_score(yt, pred_ks, zero_division=0)),
+        ks_mean_spliced=mean_of(yk, spl),
+        ks_mean_authentic=mean_of(yk, aut),
+        maxp_mean_spliced=mean_of(yr, spl),
+        maxp_mean_authentic=mean_of(yr, aut),
+        flagged_ks=float(pred_ks.mean()),
+        flagged_roc=float(pred_roc.mean()),
     )
 
 
+# ===========================================================================
+# Fő futtatás: Alapfutás + JPEG görbe + Független és Korrelált zajgörbék
+# ===========================================================================
+
 if __name__ == "__main__":
-    print("=" * 70)
+    print("=" * 72)
     print("  Robusztussági vizsgálat (checklist #17)")
-    print("  JPEG-újratömörítés + egyenletes zaj hozzáadás")
-    print("  Cikk Section 4.1: QF=75%% -> F1~0.91, QF=50%% -> F1~0.77")
-    print("=" * 70)
+    print("  JPEG-újratömörítés + Egyenletes zaj (independent vs. correlated)")
+    print("  Cikk Section 4.1 referencia: QF=75% -> F1~0.91, QF=50% -> F1~0.77")
+    print("=" * 72)
 
     with open("dataset_splits.json") as f:
         data = json.load(f)
@@ -390,14 +410,14 @@ if __name__ == "__main__":
     print("\nModellek betöltése:")
     scaler, models = load_models()
     if not models:
-        print("Hiba: egyetlen modell sem tölthető be — futtasd trainmodel_seven.py-t.")
+        print("Hiba: Egyetlen modell sem tölthető be — futtasd a trainmodel_seven.py-t.")
         exit()
-    print(f"Tesztelt modellek: {list(models.keys())}")
+    print(f"Tesztelt modellek ({len(models)} db): {list(models.keys())}")
 
-    # ── 1. LÉPÉS: TISZTA alapfutás — ebből fixáljuk a küszöböket ──────────
-    print("\n" + "=" * 70)
-    print("  ALAPFUTÁS (QF=100, zaj=0) — a küszöbök innen lesznek RÖGZÍTVE")
-    print("=" * 70)
+    # ── 1. LÉPÉS: TISZTA ALAPFUTÁS (QF=100, zaj=0) — Küszöbök rögzítése ────
+    print("\n" + "=" * 72)
+    print("  1. ALAPFUTÁS (QF=100, zaj=0) — Anti-Oracle küszöbök RÖGZÍTÉSE")
+    print("=" * 72)
     yt0, yroc0, yks0 = evaluate_attack_level(
         lambda img: img, "alapfutás (nincs torzítás)",
         images_with_masks, auth_images, scaler, models, BLOCK_SIZE, STEP)
@@ -410,28 +430,31 @@ if __name__ == "__main__":
         fixed_thresh_roc[name] = t_roc
         fixed_thresh_ks[name]  = t_ks
 
-        pred_roc = (np.array(yroc0[name]) >= t_roc).astype(int)
-        pred_ks  = (np.array(yks0[name])  >= t_ks).astype(int)
-        f1_roc0  = f1_score(yt0[name], pred_roc, zero_division=0)
-        f1_ks0   = f1_score(yt0[name], pred_ks,  zero_division=0)
-        auc_roc0 = roc_auc_score(yt0[name], yroc0[name]) if len(set(yt0[name])) > 1 else float("nan")
-        auc_ks0  = roc_auc_score(yt0[name], yks0[name])  if len(set(yt0[name])) > 1 else float("nan")
-        diag0 = level_metrics(yt0[name], yroc0[name], yks0[name], t_roc, t_ks)
-        baseline[name] = dict(f1_roc=f1_roc0, f1_ks=f1_ks0, auc_roc=auc_roc0, auc_ks=auc_ks0,
-                              t_roc=t_roc, t_ks=t_ks,
-                              ks_mean_spliced=diag0["ks_mean_spliced"],
-                              ks_mean_authentic=diag0["ks_mean_authentic"],
-                              flagged_ks=diag0["flagged_ks"])
-        print(f"  [{name}] t_roc={t_roc:.4f}  t_ks={t_ks:.4f}  "
-              f"F1_roc={f1_roc0:.4f}  F1_ks={f1_ks0:.4f}")
+        diag0    = level_metrics(yt0[name], yroc0[name], yks0[name], t_roc, t_ks)
+        auc_roc0 = float(roc_auc_score(yt0[name], yroc0[name])) if len(set(yt0[name])) > 1 else float("nan")
+        auc_ks0  = float(roc_auc_score(yt0[name], yks0[name]))  if len(set(yt0[name])) > 1 else float("nan")
+
+        baseline[name] = dict(
+            f1_roc=diag0["f1_roc"],
+            f1_ks=diag0["f1_ks"],
+            auc_roc=auc_roc0,
+            auc_ks=auc_ks0,
+            t_roc=t_roc,
+            t_ks=t_ks,
+            ks_mean_spliced=diag0["ks_mean_spliced"],
+            ks_mean_authentic=diag0["ks_mean_authentic"],
+            flagged_ks=diag0["flagged_ks"],
+        )
+        print(f"  [{name:<18s}] t_roc={t_roc:.4f}  t_ks={t_ks:.4f}  "
+              f"F1_roc={diag0['f1_roc']:.4f}  F1_ks={diag0['f1_ks']:.4f}")
 
     results = {"baseline": baseline, "jpeg": {}, "noise": {}, "noise_correlated": {}}
 
     def run_sweep(key, levels, clean_level, make_attack, label):
-        """Egy teljes torzítási görbe; minden szinten a RÖGZÍTETT küszöbbel."""
+        """Végigfuttat egy teljes torzítási görbét a RÖGZÍTETT alapküszöbökkel."""
         for lv in levels:
             if lv == clean_level:
-                yt, yroc, yks = yt0, yroc0, yks0     # alapfutás újrahasznosítva
+                yt, yroc, yks = yt0, yroc0, yks0   # Alapfutás újrahasznosítása
             else:
                 yt, yroc, yks = evaluate_attack_level(
                     make_attack(lv), f"{label} = {lv}", images_with_masks,
@@ -449,53 +472,55 @@ if __name__ == "__main__":
 
     # ── 2. LÉPÉS: JPEG-újratömörítési görbe ────────────────────────────────
     if RUN_JPEG:
-        print("\n" + "=" * 70)
-        print("  JPEG ÚJRATÖMÖRÍTÉSI GÖRBE")
-        print("=" * 70)
+        print("\n" + "=" * 72)
+        print("  2. JPEG ÚJRATÖMÖRÍTÉSI GÖRBE (QF = 100 -> 30)")
+        print("=" * 72)
         run_sweep("jpeg", JPEG_QUALITIES, 100,
                   lambda q: (lambda img: apply_jpeg_compression(img, q)), "QF")
 
-    # ── 3. LÉPÉS: Egyenletes zaj görbék (független / korrelált) ────────────
+    # ── 3. LÉPÉS: Egyenletes zaj görbék (independent vs. correlated) ───────
     for mode in NOISE_MODES:
         key = "noise" if mode == "independent" else "noise_correlated"
-        print("\n" + "=" * 70)
-        print(f"  EGYENLETES ZAJ GÖRBE — mód: {mode}")
-        print("=" * 70)
+        print("\n" + "=" * 72)
+        print(f"  3. EGYENLETES ZAJ GÖRBE — mód: {mode}")
+        print("=" * 72)
 
         def make_attack(a, correlated=(mode == "correlated")):
-            # Szintenként ugyanaz a magérték: a zaj így "egymásba ágyazott"
-            # (amp=2 zaja az amp=1 zajának kétszerese), a görbe simább.
+            # Szintenként azonos RandomState magérték: a zaj így skálázottan
+            # egymásba ágyazott, ezért a torzítási görbe monoton és reprodukálható.
             rng = np.random.RandomState(RANDOM_SEED)
             return lambda img: apply_uniform_noise(img, a, rng, correlated=correlated)
 
         run_sweep(key, NOISE_AMPLITUDES, 0, make_attack, f"amp[{mode}]")
 
-    # ── Összefoglaló táblázatok ──────────────────────────────────────────
+    # ── 4. LÉPÉS: Összefoglaló táblázatok és JSON export ───────────────────
     def print_tables(key, levels, title, prefix):
         if not results[key]:
             return
-        print("\n" + "=" * 78)
-        print(f"  ÖSSZEFOGLALÓ — F1 (KS-módszer): {title}")
-        print("=" * 78)
+        print("\n" + "=" * 82)
+        print(f"  ÖSSZEFOGLALÓ — Képszintű F1 (KS-módszer): {title}")
+        print("=" * 82)
         print(f"  {'Modell':<18}" + "".join(f"{prefix}{lv}".ljust(10) for lv in levels))
+        print("  " + "-" * (18 + 10 * len(levels)))
         for name in models:
             print(f"  {name:<18}" + "".join(
                 f"{results[key][lv][name]['f1_ks']:<10.4f}" for lv in levels))
 
         print(f"\n  KS-szeparáció (átlagos KS: spliced/authentic) — {title}")
         print(f"  {'Modell':<18}" + "".join(f"{prefix}{lv}".ljust(10) for lv in levels))
+        print("  " + "-" * (18 + 10 * len(levels)))
         for name in models:
             print(f"  {name:<18}" + "".join(
                 f"{results[key][lv][name]['ks_mean_spliced']:.2f}/"
                 f"{results[key][lv][name]['ks_mean_authentic']:.2f}".ljust(10)
                 for lv in levels))
-        print("  rögzített t_ks: " + ", ".join(
+        print("  Rögzített t_ks küszöbök: " + ", ".join(
             f"{n}={fixed_thresh_ks[n]:.2f}" for n in models))
 
     print_tables("jpeg", JPEG_QUALITIES, "JPEG minőségi faktor", "QF=")
-    print_tables("noise", NOISE_AMPLITUDES, "független zaj amplitúdó", "a=")
-    print_tables("noise_correlated", NOISE_AMPLITUDES, "korrelált zaj amplitúdó", "a=")
+    print_tables("noise", NOISE_AMPLITUDES, "Független zaj amplitúdó", "a=")
+    print_tables("noise_correlated", NOISE_AMPLITUDES, "Korrelált zaj amplitúdó", "a=")
 
     with open("robustness_results.json", "w") as f:
         json.dump(results, f, indent=4)
-    print("\nJSON export: robustness_results.json")
+    print("\nJSON export sikeresen mentve: robustness_results.json")
