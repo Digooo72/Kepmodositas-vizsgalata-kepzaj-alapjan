@@ -1,7 +1,7 @@
 """
 tune_treshold.py
 
-Képszintű optimális döntési küszöb (t_hat) meghatározása — MINDIG MINDKÉT módszerrel:
+Képszintű optimális döntési küszöb (t_hat) meghatározása — mindkét módszerrel:
 
   ── 1. ROC módszer (Cikk Section 3.5, Table 2) ─────────────────────────────
   Képszintű score = max(P_I): a hőtérkép maximuma (Eq. 4-5).
@@ -27,7 +27,7 @@ import joblib
 import cv2
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")   # FONTOS: Nincs GUI overhead szerveren/háttérben történő futtatáskor
+matplotlib.use("Agg")   # Háttérbeli (GUI nélküli) ábragenerálás
 import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
 from sklearn.metrics import roc_curve, roc_auc_score
@@ -55,7 +55,7 @@ def build_heat_map(img_path, clf, scaler, block_size=32, step=8):
     feats_sc = np.nan_to_num(
         scaler.transform(feats), nan=0.0, posinf=0.0, neginf=0.0)
 
-    # 3-OSZTÁLYOS SÉMA (checklist #1): P(Manipulált) = 1 - P(Uniform) = P(Border) + P(Spliced).
+    # 3-OSZTÁLYOS SÉMA: P(Manipulált) = 1 - P(Uniform) = P(Border) + P(Spliced)
     probs = 1.0 - clf.predict_proba(feats_sc)[:, 0]
 
     hs = np.zeros((h, w), np.float32)
@@ -109,7 +109,7 @@ def score_ks(heat_map, h, w, mask_binary=None):
 
 def both_scores_from_path(img_path, clf, scaler,
                           mask_path=None, block_size=32, step=8):
-    """Kiszámítja MINDKÉT score-t (max_p és ks_stat) egyetlen hőtérkép-felépítéssel."""
+    """Kiszámítja mindkét score-t (max_p és ks_stat) egyetlen hőtérkép-felépítéssel."""
     heat_map, h, w = build_heat_map(img_path, clf, scaler, block_size, step)
     if heat_map is None:
         return 0.0, 0.0
@@ -129,16 +129,16 @@ def both_scores_from_path(img_path, clf, scaler,
 
 
 # ---------------------------------------------------------------------------
-# ROC L2-optimális küszöb számítása (mesterséges pont kiszűrésével)
+# ROC L2-optimális küszöb számítása
 # ---------------------------------------------------------------------------
 
 def roc_optimal_threshold(y_true, y_scores):
     """
     A ROC görbe alapján az (0,1) ideális ponttól vett L2-távolságot minimalizáló küszöb.
 
-    HIBAJAVÍTÁS: Az sklearn roc_curve() által beszúrt mesterséges első pontot
-    (FPR=0, TPR=0, threshold=max+1) kizárjuk a keresésből, hogy a küszöb sose
-    ragadjon be a triviális "mindent elutasító" pontba.
+    Megjegyzés: Az sklearn roc_curve() által az első indexre beszúrt mesterséges
+    kezdőpontot (FPR=0, TPR=0, threshold=max+1) kizárjuk a küszöbkeresésből, hogy
+    az L2-távolság mindig valódi, adatból származó küszöböt válasszon.
     """
     y_t   = np.array(y_true)
     y_s   = np.array(y_scores, dtype=float)
@@ -150,7 +150,7 @@ def roc_optimal_threshold(y_true, y_scores):
     auc = roc_auc_score(y_t[valid], y_s[valid])
     fpr, tpr, thrs = roc_curve(y_t[valid], y_s[valid])
 
-    # A mesterséges első pont kizárása a küszöbkeresésből
+    # A mesterséges első kezdőpont kizárása a küszöbkeresésből
     if len(thrs) > 1:
         fpr_search, tpr_search, thrs_search = fpr[1:], tpr[1:], thrs[1:]
     else:
@@ -356,7 +356,7 @@ def find_optimal_threshold(model_path="itier_rf_model.pkl",
 
     plt.tight_layout()
     plt.savefig("roc_curve_both.png", dpi=120, bbox_inches="tight")
-    plt.close(fig)   # JAVÍTÁS: plt.show() helyett plt.close(fig), így szerveren sem blokkol
+    plt.close(fig)   # Ábra bezárása és memória felszabadítása
     print("\nÁbra sikeresen mentve: roc_curve_both.png")
 
     # ── Összefoglaló konzolos kiírás ───────────────────────────────────────

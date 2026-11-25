@@ -1,17 +1,17 @@
 {
     "cv_f1_scores": {
-        "RFC": 0.8378753644511779,
-        "SVM": 0.8049076825702562,
-        "K-Means": 0.5158273106420848,
-        "MLP": 0.8133811688920219,
-        "GradientBoosting": 0.8336950294154342,
-        "GMM": 0.5951778682107695,
-        "BayesianEM": 0.682942547209341
+        "RFC": 0.853970172582797,
+        "SVM": 0.8221317228766644,
+        "K-Means": 0.52175061533171,
+        "MLP": 0.8267706037943959,
+        "GradientBoosting": 0.8575533372241884,
+        "GMM": 0.5565788376031664,
+        "BayesianEM": 0.6432869619408305
     },
-    "best_model": "RFC",
-    "n_train": 135,
-    "n_balanced": 5151,
+    "best_model": "GradientBoosting",
+    "n_train": 30,
+    "n_balanced": 3999,
     "n_classes": 3,
-    "max_train_blocks": 150000,
-    "n_jobs_cv": 1
+    "max_train_blocks": 120000,
+    "n_jobs_cv": 2
 }

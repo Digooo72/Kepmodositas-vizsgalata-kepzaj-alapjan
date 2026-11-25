@@ -44,9 +44,9 @@ from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 
 from itier import extract_features_from_image, load_binary_mask
 from evaluate_model import connected_components_postprocess
-# 3-OSZTÁLYOS SÉMA (checklist #1): a KMeansClassifier a trainmodel_seven.py-ban,
-# a GMMClassifier és BayesianEMClassifier pedig a clustering_models.py-ban van
-# definiálva — a joblib.load() unpickle műveletéhez ezeket innen importáljuk.
+# A KMeansClassifier a trainmodel_seven.py-ban, a GMMClassifier és
+# BayesianEMClassifier pedig a clustering_models.py-ban van definiálva;
+# a joblib.load() deszerializációhoz ezeket innen importáljuk.
 from trainmodel_seven import KMeansClassifier
 from clustering_models import GMMClassifier, BayesianEMClassifier
 
@@ -62,41 +62,33 @@ GC_INTERVAL         = 10      # MEM #3: Minden N. kép után explicit gc.collect
 
 
 # ===========================================================================
-# Határvonal-tudatos, perem-vékonyított maszkgenerálás (JAVÍTOTT)
+# Határvonal-tudatos, perem-vékonyított maszkgenerálás
 # ===========================================================================
 
-BORDER_THRESH       = 0.72   # 0.65 -> 0.72: szigorúbb küszöb a külső FP glória ellen
-BORDER_ERODE_PX     = 5      # 32x32-es ablak túlnyúlásának visszavágása (4-6 px optimális)
-MIN_COMPONENT_RATIO = 0.015  # Képméret 1.5%-ánál kisebb FP foltok (pl. ikonok) törlése
-FILL_INTERNAL_HOLES = True   # Manipulált régión belüli zöld (FN) lyukak kitöltése
+BORDER_THRESH       = 0.72   # Peremvalószínűségi küszöb a csúszóablak-túlnyúlás csökkentésére
+BORDER_ERODE_PX     = 5      # 32x32-es ablak túlnyúlásának visszavágása pixelben
+MIN_COMPONENT_RATIO = 0.015  # Képméret 1.5%-ánál kisebb szigetek (pl. ikonok) szűrése
+FILL_INTERNAL_HOLES = True   # Manipulált régión belüli belső üregek (FN) kitöltése
 
 
 def build_pred_mask(heat_map, block_size):
     """
-    Finomított, határvonal-vékonyított bináris maszk (0 vagy 255) előállítása
-    a (H, W) méretű valószínűségi hőtérképből.
+    Határvonal-vékonyított bináris maszk (0 vagy 255) előállítása a (H, W)
+    méretű valószínűségi hőtérképből.
 
-    Fizikai és matematikai indoklás:
-      A 32x32-es csúszóablak már ~35-40%-os belépésnél (beta in [0.4, 0.6])
-      magas (~1.0) valószínűséget ad, miközben a blokk másik ~60%-a (~19 pixel)
-      kilóg a hiteles (Uniform) háttérbe. Ezt a geometriai túlnyúlást (FP glóriát)
-      és a háttér éles grafikus elemein (pl. asztali ikonokon) keletkező apró
-      lokális riasztásokat négy lépésben küszöböljük ki:
-
-      1. Alapmaszk (`connected_components_postprocess`) egyesítése a megemelt
-         `BORDER_THRESH = 0.72` küszöbű perempixelekkel, majd 5x5-ös elliptikus
-         morfológiai zárás (`cv2.MORPH_CLOSE`) a 8 pixeles lépésközből eredő
-         rácshézagok összekötésére.
-      2. Kis területű hamis pozitív (FP) szigetek szűrése (`cv2.connectedComponentsWithStats`):
-         minden olyan különálló komponenst törlünk, amely nem éri el a képméret
-         `MIN_COMPONENT_RATIO` (1.5%) arányát vagy a legnagyobb komponens 10%-át.
-      3. Belső üregek (False Negative lyukak) kontúralapú kitöltése
-         (`cv2.findContours` + `cv2.FILLED`), hogy a manipulált régió belseje
-         tömör maradjon.
-      4. Képszél-védett perem-erózió (`BORDER_ERODE_PX = 5`):
-         levágja a 32x32-es blokkok külső (host irányú) túlnyúlását, de a
-         `cv2.copyMakeBorder(..., value=255)` keretezésnek köszönhetően a valódi
-         képszélekhez tapadó manipulált régiót nem húzza el a kép keretétől.
+    Működési lépések:
+      1. Alapmaszk (`connected_components_postprocess`) egyesítése a `BORDER_THRESH`
+         küszöbű perempixelekkel, majd 5x5-ös elliptikus morfológiai zárás
+         (`cv2.MORPH_CLOSE`) a 8 pixeles lépésközből eredő rácshézagok bezárására.
+      2. Kis területű hamis pozitív szigetek szűrése (`cv2.connectedComponentsWithStats`):
+         a képméret `MIN_COMPONENT_RATIO` arányát vagy a legnagyobb komponens 10%-át
+         el nem érő különálló komponensek eltávolítása.
+      3. Belső üregek kontúralapú kitöltése (`cv2.findContours` + `cv2.FILLED`),
+         hogy a manipulált régió belseje tömör maradjon.
+      4. Képszél-védett perem-erózió (`BORDER_ERODE_PX`): levágja a 32x32-es
+         csúszóablakok külső (host irányú) túlnyúlását, miközben a
+         `cv2.copyMakeBorder(..., value=255)` keretezés megakadályozza a kép
+         széléhez tapadó régiók visszahúzását.
     """
     h, w = heat_map.shape[:2]
     base_mask     = connected_components_postprocess(heat_map, block_size=block_size)
@@ -107,7 +99,7 @@ def build_pred_mask(heat_map, block_size):
     k_close  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     mask_bin = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k_close)
 
-    # 2. Kis területű FP foltok (pl. asztali ikonok, lokális él-zajok) kiszűrése
+    # 2. Kis területű FP foltok (pl. háttértextúra, ikonok) kiszűrése
     if MIN_COMPONENT_RATIO > 0:
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
             mask_bin, connectivity=8)
@@ -138,12 +130,9 @@ def build_pred_mask(heat_map, block_size):
     if BORDER_ERODE_PX > 0:
         r = int(BORDER_ERODE_PX)
         k_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
-        # Pad 255-tel a külső képszéleken, hogy a kép széléig érő (pl. jobb oldali)
-        # hamisított régiót az erózió ne húzza el a kép keretétől:
         padded = cv2.copyMakeBorder(
             mask_bin, r, r, r, r, borderType=cv2.BORDER_CONSTANT, value=255)
         eroded = cv2.erode(padded, k_erode, iterations=1)[r:r + h, r:r + w]
-        # Ha az erózió teljesen eltüntetne egy nagyon vékony maszkot, megtartjuk az eredetit
         if np.any(eroded):
             mask_bin = eroded
 
@@ -210,7 +199,7 @@ def save_visualization(out_path, base_name, model_name,
       1. Eredeti RGB kép
       2. Ground Truth (GT) bináris maszk
       3. Valószínűségi hőtérkép (Jet színskála, [0, 1])
-      4. Finomított prediktált bináris maszk (`build_pred_mask`)
+      4. Prediktált bináris maszk (`build_pred_mask`)
       5. Színkódolt Overlay:
            - Narancssárga = True Positive  (TP: helyesen detektált manipulált pixel)
            - Piros        = False Positive (FP: tévesen manipuláltnak jelölt háttér)

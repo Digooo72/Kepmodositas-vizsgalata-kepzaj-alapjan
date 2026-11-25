@@ -1,8 +1,8 @@
 """
 evaluate_robustness.py
 
-CHECKLIST #17 — Képzajalapú képmódosítás-vizsgálatok (Ellen-forenzikus robusztusság)
-======================================================================================
+Képzajalapú képmódosítás-vizsgálatok (Ellen-forenzikus robusztusság)
+====================================================================
 Az Itier et al. (2021) cikk Section 4.1 utolsó kísérletének reprodukciója és
 kiterjesztése a teljes 7-modelles keretrendszerre:
 
@@ -28,16 +28,15 @@ kiterjesztése a teljes 7-modelles keretrendszerre:
                          szétrombolja az RGB csatornák közötti korrelációt.
        - "correlated"  : mindhárom csatornán azonos (H, W, 1) zaj, amely megtartja
                          a csatornaközi korrelációt, csak a zajenergiát növeli.
-     Tudományos jelentőség: a két zajmód összevetése közvetlenül bizonyítja, hogy
-     a modellek nem a zaj intenzitására, hanem az RGB csatornák közötti
-     korreláció megbomlására érzékenyek.
+     A két zajmód összevetésével elkülöníthető a zajenergia-maszkolás és a
+     csatornaközi korrelációrombolás hatása.
 
-─── "Anti-Oracle" rögzített küszöbprotokoll ─────────────────────────────────────
-  A képszintű döntési küszöböt (t_roc és t_ks) KIZÁRÓLAG EGYSZER, a torzítatlan
+─── Rögzített alapküszöb protokoll ──────────────────────────────────────────────
+  A képszintű döntési küszöböt (t_roc és t_ks) kizárólag egyszer, a torzítatlan
   alapfutáson (QF=100, zaj=0) határozzuk meg és rögzítjük. Minden további
   torzítási szinten ezt a fix küszöböt alkalmazzuk, így valós támadási helyzetet
-  szimulálunk (nem kalibráljuk újra a detektort a támadó paramétereire).
-────────────────────────────────────────────────────────────────────────────────
+  szimulálunk újrakalibrálás nélkül.
+─────────────────────────────────────────────────────────────────────────────────
 """
 
 import os
@@ -50,9 +49,6 @@ from scipy.stats import ks_2samp
 from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 
 from itier import extract_features_from_array, load_binary_mask
-# 3-OSZTÁLYOS SÉMA (checklist #1): a KMeansClassifier a trainmodel_seven.py-ban,
-# a GMMClassifier és BayesianEMClassifier pedig a clustering_models.py-ban van
-# definiálva — a pickle-elt modellek betöltéséhez innen importáljuk őket.
 from trainmodel_seven import KMeansClassifier
 from clustering_models import GMMClassifier, BayesianEMClassifier
 
@@ -62,7 +58,7 @@ from clustering_models import GMMClassifier, BayesianEMClassifier
 BLOCK_SIZE = 32   # Csúszóablak mérete (32x32 pixel, Cikk Section 4.1)
 STEP       = 8    # Csúszóablak lépésköze (8 pixel, Cikk Section 4.1)
 
-# None = minden betöltött modellt tesztel; pl. ["RFC"] = gyors, egymodelles futás
+# None = minden betöltött modellt tesztel; pl. ["RFC"] = egymodelles futás
 MODELS_TO_TEST = None
 
 # JPEG minőségi faktorok (QF=100 a torzítatlan kontroll)
@@ -92,12 +88,11 @@ def apply_jpeg_compression(img_rgb, quality):
     JPEG újratömörítés memóriában (cv2.imencode -> cv2.imdecode).
     quality >= 100 esetén (kontroll) az eredeti képet adja vissza változatlanul.
 
-    Módszertani megjegyzés (OpenCV 4:2:0 vs. Cikk 4:2:2):
-      A cikk Section 4.1 fejezete 4:2:2 chroma subsamplinget említ, míg az OpenCV
-      cv2.imencode alapértelmezésben 4:2:0 szubmintavételezést alkalmaz (vízszintesen
-      és függőlegesen is felezi a Cb/Cr színcsatornák felbontását). Ez szigorúbb
-      ellen-forenzikus teszt, mivel a 4:2:0 erősebben mossa össze a magas
-      frekvenciás RGB színzaj-korrelációt.
+    Módszertani megjegyzés:
+      Az OpenCV cv2.imencode alapértelmezésben 4:2:0 chroma subsamplinget alkalmaz
+      (vízszintesen és függőlegesen is felezi a Cb/Cr színcsatornák felbontását),
+      ami a cikkben említett 4:2:2 szubmintavételezésnél erősebb színkorreláció-csökkenést
+      idéz elő.
     """
     if quality >= 100:
         return img_rgb.copy()
@@ -118,14 +113,10 @@ def apply_uniform_noise(img_rgb, amplitude, rng, correlated=False):
         csatornára azonos értékkel adódik hozzá -> a csatornák közötti korreláció
         megmarad, csupán a zaj energiája nő.
 
-    NUMERIKUS HIBAJAVÍTÁS (np.rint):
-      A közvetlen `.astype(np.uint8)` csonkolást (truncation towards zero) végez,
-      ami miatt kis amplitúdóknál (pl. amp=0.5 és amp=1.0) minden pozitív törtzajból
-      0, minden negatív törtzajból -1 lenne (így amp=0.5 és amp=1.0 pontosan
-      ugyanazt a uint8 képet adná). Az `np.rint(noisy)` szimmetrikus matematikai
-      kerekítést végez a [0, 255] vágás előtt:
-        - amp=0.5 esetén [-0.5, +0.5] -> csak a kerekítési határon változtat
-        - amp=1.0 esetén [-1.0, +1.0] -> valódi {-1, 0, +1} perturbációt ad.
+    Numerikus kerekítés (np.rint):
+      A közvetlen uint8 típuskonverzió csonkolást végezne, ami kis amplitúdóknál
+      (pl. amp=0.5 és amp=1.0) torzítaná a kvantálást; az np.rint(noisy)
+      szimmetrikus matematikai kerekítést alkalmaz a [0, 255] vágás előtt.
     """
     if amplitude <= 0:
         return img_rgb.copy()
@@ -357,7 +348,7 @@ def get_optimal_roc_threshold(y_true, y_scores):
 def level_metrics(yt, yroc, yks, t_roc, t_ks):
     """
     Kiszámítja egy modell egy adott torzítási szinthez tartozó F1-értékeit
-    a RÖGZÍTETT (alapfutáson kalibrált) t_roc és t_ks küszöbökkel, valamint
+    a rögzített (alapfutáson kalibrált) t_roc és t_ks küszöbökkel, valamint
     a diagnosztikai átlagokat (spliced vs. authentic átlagos KS és max_p).
     """
     yt = np.asarray(yt)
@@ -389,7 +380,7 @@ def level_metrics(yt, yroc, yks, t_roc, t_ks):
 
 if __name__ == "__main__":
     print("=" * 72)
-    print("  Robusztussági vizsgálat (checklist #17)")
+    print("  Robusztussági vizsgálat")
     print("  JPEG-újratömörítés + Egyenletes zaj (independent vs. correlated)")
     print("  Cikk Section 4.1 referencia: QF=75% -> F1~0.91, QF=50% -> F1~0.77")
     print("=" * 72)
@@ -416,7 +407,7 @@ if __name__ == "__main__":
 
     # ── 1. LÉPÉS: TISZTA ALAPFUTÁS (QF=100, zaj=0) — Küszöbök rögzítése ────
     print("\n" + "=" * 72)
-    print("  1. ALAPFUTÁS (QF=100, zaj=0) — Anti-Oracle küszöbök RÖGZÍTÉSE")
+    print("  1. ALAPFUTÁS (QF=100, zaj=0) — Alapküszöbök rögzítése")
     print("=" * 72)
     yt0, yroc0, yks0 = evaluate_attack_level(
         lambda img: img, "alapfutás (nincs torzítás)",
@@ -451,7 +442,7 @@ if __name__ == "__main__":
     results = {"baseline": baseline, "jpeg": {}, "noise": {}, "noise_correlated": {}}
 
     def run_sweep(key, levels, clean_level, make_attack, label):
-        """Végigfuttat egy teljes torzítási görbét a RÖGZÍTETT alapküszöbökkel."""
+        """Végigfuttat egy teljes torzítási görbét a rögzített alapküszöbökkel."""
         for lv in levels:
             if lv == clean_level:
                 yt, yroc, yks = yt0, yroc0, yks0   # Alapfutás újrahasznosítása

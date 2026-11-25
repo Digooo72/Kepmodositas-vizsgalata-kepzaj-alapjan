@@ -1,8 +1,8 @@
 {
-    "threshold": 0.987500011920929,
+    "threshold": 0.9844942092895508,
     "method": "roc",
-    "auc": 0.9906172839506172,
-    "fpr_at_optimum": 0.044444444444444446,
+    "auc": 0.9901234567901234,
+    "fpr_at_optimum": 0.08888888888888889,
     "tpr_at_optimum": 1.0,
     "spliced_count": 45,
     "authentic_count": 45

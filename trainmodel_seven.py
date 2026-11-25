@@ -13,21 +13,21 @@ valószínűség-kalibrálása és összehasonlítása a 3-osztályos SRM-PCA bl
   7. Bayesian Gaussian Mixture (BayesianEM) — Variational EM, Dirichlet-folyamat priorral
 
 ─── Fő módszertani és szoftvermérnöki pillérek ─────────────────────────────────
-  - ADATSZIVÁRGÁS-MENTES GLOBÁLIS SKÁLÁZÁS (FIX #1):
+  - GLOBÁLIS SKÁLÁZÁS:
     A StandardScaler kizárólag a kiegyensúlyozott tanítóblokkokon (X_bal)
     illeszkedik, és `itier_scaler.pkl` néven kerül mentésre.
-  - 3-OSZTÁLYOS KIEGYENSÚLYOZÁS (checklist #1):
+  - 3-OSZTÁLYOS KIEGYENSÚLYOZÁS:
     A `balance_classes()` függvény alulmintavételezéssel (undersampling) egyenlő
     elemszámra hozza a CLASS_UNIFORM (0), CLASS_BORDER (1) és CLASS_SPLICED (2)
     osztályokat (lásd Cikk Section 3.4).
-  - KILENCPONTOS MEMÓRIA-OPTIMALIZÁCIÓ (MEM #1 – MEM #9):
+  - MEMÓRIAMENEDZSMENT (MEM #1 – MEM #9):
     1. del X_raw, y_raw          -> Nyers listák törlése np.vstack után
     2. MAX_TRAIN_BLOCKS korlát   -> Elő-mintavételezés az OOM (Out-Of-Memory) ellen
     3. np.asarray (float32)      -> Másolásmentes típuskonverzió
     4. del X_all, y_all          -> Teljes blokkmátrix törlése kiegyensúlyozás után
     5. StandardScaler -> float32 -> A float64 kimenet felezése (8 bájt -> 4 bájt)
     6. del X_bal                 -> Skálázatlan tömb törlése illesztés után
-    7. N_JOBS_CV = 1             -> Nincs multiprocess worker-fork memóriaduplikáció
+    7. N_JOBS_CV                 -> Kontrollált parallelizmus a worker-memóriához
     8. Explicit gc.collect()     -> Memória-visszanyerés minden egyes modell után
     9. Részhalmaz-indexek törlése -> idx_svm, idx_mlp, idx_gmm, idx_em felszabadítása
 ────────────────────────────────────────────────────────────────────────────────
@@ -77,12 +77,12 @@ class KMeansClassifier(BaseEstimator, ClassifierMixin):
 
     Működési elv:
       1. fit(X, y):
-         - Felügyelet nélkül `n_clusters` (alapértelmezetten 6) Voronoï-cellára
+         - Felügyelet nélkül `n_clusters` (alapértelmezetten 6) Voronoi-cellára
            bontja a 60 dimenziós jellemzőteret.
          - A tanítócímkék (y) alapján minden klasztert a benne lévő minták
            TÖBBSÉGI osztályához (Uniform / Border / Spliced) rendel.
-         - Ütközésmentes biztonsági mentéssel garantálja, hogy minden osztályhoz
-           tartozzon legalább egy klaszter.
+         - Ütközésmentes biztonsági hozzárendeléssel garantálja, hogy minden
+           osztályhoz tartozzon legalább egy klaszter.
       2. predict_proba(X):
          - A klaszterközéppontoktól mért euklideszi távolságokat (d_k) az átlagos
            saját-klaszter távolsággal (_scale_) normálja, majd numerikusan stabil
@@ -124,7 +124,7 @@ class KMeansClassifier(BaseEstimator, ClassifierMixin):
 
         cluster_to_class_idx = np.argmax(class_rates, axis=1)
 
-        # Ütközésmentes biztonsági mentés: minden osztálynak jusson legalább 1 klaszter
+        # Ütközésmentes biztonsági hozzárendelés: minden osztálynak jusson legalább 1 klaszter
         reserved = set()
         for ci in range(n_classes):
             if not np.any(cluster_to_class_idx == ci):
@@ -190,12 +190,12 @@ class KMeansClassifier(BaseEstimator, ClassifierMixin):
 # ===========================================================================
 # MEMÓRIA- ÉS FUTÁSI KONFIGURÁCIÓ
 # ===========================================================================
-MAX_TRAIN_BLOCKS = 220_000   # MEM #2: Nyers tanítóblokkok felső korlátja (~34.3 MB float32)
-N_JOBS_CV        = 2         # MEM #7: 1 = szekvenciális CV (nincs worker-fork memóriaduplikáció)
+MAX_TRAIN_BLOCKS = 220_000   # MEM #2: Nyers tanítóblokkok felső korlátja (float32)
+N_JOBS_CV        = 2         # MEM #7: Párhuzamos CV szálak száma (8 GB RAM-hoz méretezve)
 
 # Modellspecifikus mintakorlátok a nagy számítási igényű algoritmusokhoz:
 MAX_SVM_SAMPLES  = 20_000    # Az SVM kvadratikus/köbös skálázódása miatt
-MAX_MLP_SAMPLES  = 40_000    # MLP RandomizedSearchCV (30 iteráció x 3 fold) gyorsításához
+MAX_MLP_SAMPLES  = 40_000    # MLP RandomizedSearchCV (20 iteráció x 3 fold) gyorsításához
 MAX_GMM_SAMPLES  = 30_000    # 60x60-as teljes kovarianciamátrixok EM becsléséhez
 MAX_BGMM_SAMPLES = 15_000    # Variational EM (BayesianGMM) számítási igénye miatt
 # ===========================================================================
@@ -297,9 +297,9 @@ def _roc_optimal(y_true, y_scores):
     Kiszámítja a ROC görbe (0,1) ideális pontjától vett L2-távolságot minimalizáló
     optimális döntési küszöböt (Cikk Section 3.5).
 
-    HIBAJAVÍTÁS: Az sklearn roc_curve() által beszúrt mesterséges 0. indexű pontot
-    (FPR=0, TPR=0, threshold=max+1) kizárjuk a minimumkeresésből, hogy a küszöb
-    sose ragadjon be egy triviális "mindent elutasító" értékre.
+    Az sklearn roc_curve() által az első indexre beszúrt mesterséges kezdőpontot
+    (FPR=0, TPR=0, threshold=max+1) kizárjuk a minimumkeresésből, hogy az L2-távolság
+    mindig valódi, adatból származó küszöböt válasszon.
     """
     yt = np.array(y_true)
     ys = np.array(y_scores, dtype=float)
@@ -476,7 +476,7 @@ if __name__ == "__main__":
     print(f"    N_JOBS_CV        = {N_JOBS_CV}             (GridSearchCV parallelizmus)")
     print(f"    Becsült max. mátrixméret: {MAX_TRAIN_BLOCKS * 60 * 4 / 1024**2:.1f} MB (float32)\n")
 
-    MAX_IMAGES = 60   # None = összes tanítókép (135 db); egész szám = gyors teszt
+    MAX_IMAGES = 60   # None = összes tanítókép (135 db); egész szám = részhalmaz
 
     with open("dataset_splits.json", "r") as f:
         data = json.load(f)
@@ -490,7 +490,7 @@ if __name__ == "__main__":
         half = MAX_IMAGES // 2
         sel  = col[:half] + cas[:half] or list(zip(train_images, train_masks))[:MAX_IMAGES]
         train_images, train_masks = zip(*sel)
-        print(f"Gyors teszt: {len(train_images)} képen tanítunk.")
+        print(f"Részhalmaz mód: {len(train_images)} képen tanítunk.")
     else:
         print(f"Teljes tanítóhalmaz: {len(train_images)} kép.")
 
@@ -536,7 +536,7 @@ if __name__ == "__main__":
           f"Spliced: {int(np.sum(y_bal==2))}")
     print(f"Balanced méret: {X_bal.nbytes / 1024**2:.1f} MB (float32)")
 
-    # ── 3. Globális StandardScaler illesztése és mentése (FIX #1) ─────────
+    # ── 3. Globális StandardScaler illesztése és mentése ──────────────────
     # MEM #5: A StandardScaler float64 kimenetét visszakonvertáljuk float32-re
     print("\nGlobális StandardScaler illesztése...")
     scaler = StandardScaler()
@@ -552,7 +552,7 @@ if __name__ == "__main__":
     # ── MODEL 1: Random Forest Classifier (RFC) ───────────────────────────
     print("\n" + "=" * 62)
     print("  [1/7] Random Forest Classifier (GridSearchCV)")
-    print(f"  n_jobs={N_JOBS_CV}  (MEM #7: nincs fork-másolat)")
+    print(f"  n_jobs={N_JOBS_CV}")
     print("=" * 62)
     gs_rf = GridSearchCV(
         RandomForestClassifier(random_state=42),

@@ -1,12 +1,10 @@
 """
 Evaluate filter ablation.py
 
-CHECKLIST #7 — Jellemzőkinyerés szétszedése SRM szűrők szerint (Ablációs vizsgálat)
-====================================================================================
-Az Itier et al. (2021) cikk 1. táblázatának (Table 1) reprodukciója[cite: 2, 19]:
-az 5 darab SRM magas-passzív szűrőt (HSB, VSB, RF0, RF1, RF2) KÜLÖN-KÜLÖN (12 dimenzió)
-is kiértékeli, majd a végén az összes szűrő konkatenált változatával ("Concatenated",
-60 dimenzió) hasonlítja össze[cite: 2, 5, 19]:
+Jellemzőkinyerés szűrőnkénti ablációs vizsgálata (Itier et al., 2021, Table 1)
+=============================================================================
+Az 5 darab SRM magas-passzív szűrőt (HSB, VSB, RF0, RF1, RF2) külön-külön (12 dimenzió)
+és konkatenált formában ("Concatenated", 60 dimenzió) értékeli ki:
 
     Metrika               HSB    VSB    RF0    RF1    RF2   Concatenated
     Mean precision        ...    ...    ...    ...    ...   ...
@@ -14,30 +12,30 @@ is kiértékeli, majd a végén az összes szűrő konkatenált változatával (
     Mean F1 score         ...    ...    ...    ...    ...   ...
     Variance F1 (x1e-4)   ...    ...    ...    ...    ...   ...
 
-─── Módszertan (Cikk Section 4.1 alapján, KÉP-SZINTŰ osztályozás) ───────────────
+─── Módszertan (Cikk Section 4.1 alapján, képszintű osztályozás) ────────────────
   1. Fordított 5-szörös keresztvalidáció (1/5 tanító, 4/5 teszt):
      Az adatbázis (spliced + authentic képek) 5 kiegyensúlyozott (stratifikált)
      partícióra van osztva. 5 fordulóban mindig EGY partíción (20%) tanítunk, és a
      MARADÉK NÉGY partíción (80%) tesztelünk ("one is used for training and the
-     other four are grouped to form the validation set", Section 4.1)[cite: 2, 19].
+     other four are grouped to form the validation set", Section 4.1).
      Indoklás: egyetlen képen is több száz 32x32-es csúszóablak keletkezik, így a
-     képek 1/5-e már elegendő blokkot biztosít a Random Forest betanításához[cite: 2, 19].
+     képek 1/5-e már elegendő blokkot biztosít a Random Forest betanításához.
 
   2. Rögzített Random Forest osztályozó:
      n_estimators=100, max_depth=20, random_state=42. A cikk Table 1 kísérlete a
      szűrők informativitását hasonlítja össze változatlan osztályozó mellett.
 
-  3. 3-osztályos képszintű pontszám (checklist #1):
+  3. 3-osztályos képszintű pontszám:
      Minden blokkra P(Manipulált) = 1 - P(CLASS_UNIFORM) = P(Border) + P(Spliced),
-     a képszintű pontszám pedig a kép összes blokkján vett maximum: max(P_I)[cite: 2, 16].
+     a képszintű pontszám pedig a kép összes blokkján vett maximum: max(P_I).
 
-  4. Numerikusan stabilizált ROC L2-küszöbölés (Cikk Section 3.5):
-     - A roc_curve() mesterséges első pontját (FPR=0, TPR=0, thr=+inf) kizárjuk
-       a keresésből, hogy gyengébb szűrőnél se ragadjon be a "mindent elutasító"
-       küszöbre[cite: 2].
-     - A döntésnél szigorú '>' helyett '>=' relációt (y_score >= t_hat) alkalmazunk,
-       így t_hat = 1.0000 esetén sem omlik össze 0-ra a detektálás[cite: 2].
-────────────────────────────────────────────────────────────────────────────────────
+  4. ROC L2-küszöbölés (Cikk Section 3.5):
+     - A roc_curve() mesterséges első kezdőpontját (FPR=0, TPR=0, thr=+inf) kizárjuk
+       a keresésből, hogy az L2-távolság mindig valódi, adatból származó küszöböt
+       válasszon.
+     - A bináris döntésnél megengedő '>=' relációt (y_score >= t_hat) alkalmazunk,
+       konzisztensen az sklearn roc_curve() belső küszöbdefiníciójával.
+─────────────────────────────────────────────────────────────────────────────────
 """
 
 import os
@@ -53,20 +51,20 @@ from itier import extract_features_from_image, CLASS_UNIFORM, ALL_FILTER_NAMES
 # ===========================================================================
 # KONFIGURÁCIÓ
 # ===========================================================================
-BLOCK_SIZE      = 32     # Csúszóablak mérete (32x32 pixel, Cikk Section 4.1)[cite: 2, 18]
-STEP            = 8      # Csúszóablak lépésköze (8 pixel, Cikk Section 4.1)[cite: 2, 18]
-N_FOLDS         = 5      # 5-fold rotáló partícionálás (1 fold train, 4 fold test)[cite: 2, 19]
-MAX_AUTH_IMAGES = 180    # Hiteles (authentic) képek felső korlátja (Columbia = 180)[cite: 2, 17]
+BLOCK_SIZE      = 32     # Csúszóablak mérete (32x32 pixel, Cikk Section 4.1)
+STEP            = 8      # Csúszóablak lépésköze (8 pixel, Cikk Section 4.1)
+N_FOLDS         = 5      # 5-fold rotáló partícionálás (1 fold train, 4 fold test)
+MAX_AUTH_IMAGES = 180    # Hiteles (authentic) képek felső korlátja (Columbia = 180)
 RFC_PARAMS      = dict(n_estimators=100, max_depth=20, random_state=42, n_jobs=-1)
 
-# A cikk Table 1 oszlopai: az 5 SRM szűrő külön-külön (12D), majd konkatenálva (60D)[cite: 2, 5, 19]
+# A cikk Table 1 oszlopai: az 5 SRM szűrő külön-külön (12D), majd konkatenálva (60D)
 FILTER_SETS = {
     "HSB":          ["HSB"],
     "VSB":          ["VSB"],
     "RF0":          ["RF0"],
     "RF1":          ["RF1"],
     "RF2":          ["RF2"],
-    "Concatenated": list(ALL_FILTER_NAMES),   # Mind az 5 szűrő együtt (60 jellemző)[cite: 2, 5]
+    "Concatenated": list(ALL_FILTER_NAMES),   # Mind az 5 szűrő együtt (60 jellemző)
 }
 # ===========================================================================
 
@@ -78,8 +76,7 @@ FILTER_SETS = {
 def balance_classes(X, y):
     """
     Alulmintavételezéssel (undersampling) egyenlő elemszámra hozza a tanítóhalmazban
-    szereplő blokk-osztályokat (Uniform=0, Border=1, Spliced=2)[cite: 2, 5].
-    Önállóan itt is definiálva, hogy a szkript ne függjön a trainmodel_*.py fájloktól[cite: 2].
+    szereplő blokk-osztályokat (Uniform=0, Border=1, Spliced=2).
     """
     X_arr = np.asarray(X, dtype=np.float32)
     y_arr = np.asarray(y, dtype=np.int32)
@@ -98,23 +95,17 @@ def balance_classes(X, y):
 
 
 # ---------------------------------------------------------------------------
-# ROC L2-optimális küszöb (Cikk Section 3.5, mesterséges kezdőpont kiszűrésével)
+# ROC L2-optimális küszöb (Cikk Section 3.5)
 # ---------------------------------------------------------------------------
 
 def get_optimal_roc_threshold(y_true, y_scores):
     """
     Meghatározza a ROC görbe (0,1) ideális pontjától mért euklideszi (L2)
-    távolságot minimalizáló küszöbértéket[cite: 2, 17].
+    távolságot minimalizáló küszöbértéket.
 
-    KRITIKUS HIBAJAVÍTÁS:
-      Az sklearn roc_curve() az első (0. indexű) pontot mesterségesen szúrja be:
-      (FPR=0, TPR=0, threshold = max(y_scores) + 1)[cite: 2]. Ennek a pontnak az (0,1)-től
-      vett L2-távolsága pontosan 1.0[cite: 2]. Ha egy önálló szűrő gyengébb jelet ad és a
-      ROC-görbe közel simul az átlóhoz, a valódi küszöbök távolsága >= 1.0 lehet,
-      így az np.argmin a 0. indexet választaná -> minden képet elutasítana
-      (Precision = Recall = F1 = 0.0)[cite: 2].
-      A `fpr[1:], tpr[1:], thresholds[1:]` csonkolással kizárjuk a mesterséges
-      kezdőpontot, így mindig valódi, adatból származó küszöböt választunk[cite: 2].
+    Az sklearn roc_curve() által az első indexre beszúrt mesterséges kezdőpontot
+    (FPR=0, TPR=0, threshold = max(y_scores) + 1, amelynek L2-távolsága pontosan 1.0)
+    kizárjuk a keresésből, így mindig adatból származó küszöböt választunk.
     """
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
     if len(thresholds) > 1:
@@ -128,7 +119,7 @@ def get_optimal_roc_threshold(y_true, y_scores):
 # ---------------------------------------------------------------------------
 
 def find_authentic_images(max_count=None):
-    """Összegyűjti a hiteles képeket a 4cam_auth/ és Au/ könyvtárakból[cite: 2]."""
+    """Összegyűjti a hiteles képeket a 4cam_auth/ és Au/ könyvtárakból."""
     files = []
     for d in ["4cam_auth", "Au"]:
         if os.path.exists(d):
@@ -146,18 +137,18 @@ def collect_labeled_items():
     """
     Összegyűjti a teljes elérhető képhalmazt képszintű címkékkel:
       (img_path, mask_path_vagy_None, image_label)
-      ahol image_label = 1 (hamisított / spliced) vagy 0 (hiteles / authentic)[cite: 2].
+      ahol image_label = 1 (hamisított / spliced) vagy 0 (hiteles / authentic).
     """
     with open("dataset_splits.json", "r") as f:
         data = json.load(f)
 
     # A dataset_splits.json train és test listáiban szereplő összes maszkos kép
-    # hamisított (spliced -> image_label = 1)[cite: 2, 6].
+    # hamisított (spliced -> image_label = 1).
     spliced_pairs = (list(zip(data["train_images"], data["train_masks"])) +
                      list(zip(data["test_images"],  data["test_masks"])))
     items = [(img, msk, 1) for img, msk in spliced_pairs]
 
-    # Hiteles képek hozzáadása (maszk = None, image_label = 0)[cite: 2]
+    # Hiteles képek hozzáadása (maszk = None, image_label = 0)
     auth_images = find_authentic_images(MAX_AUTH_IMAGES)
     items += [(img, None, 0) for img in auth_images]
 
@@ -171,8 +162,8 @@ def collect_labeled_items():
 def extract_dataset_features(items, filter_names, verbose=True):
     """
     Kinyeri az adott `filter_names` szűrőkészlethez tartozó blokkjellemzőket
-    az összes képre, és memóriabeli szótárban (`cache`) eltárolja őket[cite: 2].
-    Így az 5-fold rotáció során minden képet csak EGYSZER kell feldolgozni[cite: 2].
+    az összes képre, és memóriabeli szótárban (`cache`) eltárolja őket,
+    így az 5-fold rotáció során minden képet csak egyszer dolgozunk fel.
     """
     cache = {}
     n = len(items)
@@ -197,7 +188,7 @@ def extract_dataset_features(items, filter_names, verbose=True):
 def image_max_score(entry, rfc, scaler):
     """
     Kiszámítja egy kép blokkjain a manipuláltság valószínűségének maximumát:
-      P(Manipulált) = 1 - P(CLASS_UNIFORM) = P(Border) + P(Spliced)[cite: 2, 5].
+      P(Manipulált) = 1 - P(CLASS_UNIFORM) = P(Border) + P(Spliced).
     """
     feats_sc = np.nan_to_num(
         scaler.transform(entry["feats"]), nan=0.0, posinf=0.0, neginf=0.0)
@@ -221,7 +212,7 @@ def run_fold(cache, train_paths, test_paths):
     1. Összegyűjti a tanító-partícióba eső hamisított képek blokkjait.
     2. Kiegyensúlyozza az osztályokat (`balance_classes`) és illeszti a `StandardScaler`-t.
     3. Betanítja a rögzített paraméterű Random Forest osztályozót.
-    4. Kiértékeli a teszt-partíció (4/5) összes képét (Precision, Recall, F1)[cite: 2].
+    4. Kiértékeli a teszt-partíció (4/5) összes képét (Precision, Recall, F1).
     """
     # --- 1. Blokk-szintű tanítóhalmaz összeállítása (maszkos képekből) ---
     X_list, y_list = [], []
@@ -279,11 +270,8 @@ def run_fold(cache, train_paths, test_paths):
               f"authentic score: min={auth_scores.min():.3f} "
               f"mean={auth_scores.mean():.3f} max={auth_scores.max():.3f}")
 
-    # --- 4. Optimális ROC küszöb és predikció ('>=' relációval!) ---
+    # --- 4. Optimális ROC küszöb és bináris osztályozás ---
     t_hat = get_optimal_roc_threshold(y_true, y_score)
-    # HIBAJAVÍTÁS: Az sklearn roc_curve() a küszöböt '>=' konvencióval definiálja.
-    # A korábbi szigorú '>' reláció t_hat = 1.0000 esetén minden képet elutasított
-    # (P=R=F1=0.0). A '>=' relációval ez a határeset-összeomlás megszűnik[cite: 2].
     y_pred = (y_score >= t_hat).astype(int)
 
     return dict(
@@ -302,7 +290,7 @@ def run_fold(cache, train_paths, test_paths):
 # ---------------------------------------------------------------------------
 
 def run_ablation_for_filter(display_name, filter_names, items):
-    """Lefuttatja az 5-fold fordított keresztvalidációt egy adott szűrőkészletre[cite: 2]."""
+    """Lefuttatja az 5-fold fordított keresztvalidációt egy adott szűrőkészletre."""
     print(f"\n{'='*65}")
     print(f"  Szűrő: {display_name}  (filter_names={filter_names})")
     print(f"{'='*65}")
@@ -322,9 +310,8 @@ def run_ablation_for_filter(display_name, filter_names, items):
 
     for fold_i, (big_idx, small_idx) in enumerate(
             skf.split(valid_paths, valid_labels)):
-        # A CIKK SECTION 4.1 MÓDSZERTANA SZERINT FORDÍTVA:
-        # A kis partíción (1/5, small_idx) tanítunk, és a nagy maradékon (4/5, big_idx)
-        # tesztelünk[cite: 2, 19].
+        # A cikk Section 4.1 módszertana szerint a kis partíción (1/5, small_idx)
+        # tanítunk, és a nagy maradékon (4/5, big_idx) tesztelünk.
         train_idx, test_idx = small_idx, big_idx
         train_paths = [valid_paths[i] for i in train_idx]
         test_paths  = [valid_paths[i] for i in test_idx]
@@ -372,7 +359,7 @@ def run_ablation_for_filter(display_name, filter_names, items):
 
 if __name__ == "__main__":
     print("=" * 65)
-    print("  Szűrő-abláció (checklist #7) — a cikk Table 1 reprodukciója")
+    print("  Szűrő-abláció — az Itier et al. (2021) Table 1 reprodukciója")
     print("  HSB / VSB / RF0 / RF1 / RF2 külön-külön, majd Concatenated")
     print("=" * 65)
 

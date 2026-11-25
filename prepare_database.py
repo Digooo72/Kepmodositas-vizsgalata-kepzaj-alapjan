@@ -39,7 +39,7 @@ import json
 from sklearn.model_selection import train_test_split
 
 # ===========================================================================
-# KONFIGURÁCIÓ — itt állítsd be az adatbázis-összetételt és a felosztást
+# KONFIGURÁCIÓ — adatbázis-összetétel és felosztási arányok
 # ===========================================================================
 COLUMBIA_ONLY = True   # True  = csak Columbia (cikk szerinti tiszta összevetés)
                        # False = Columbia + CASIA Tp_D_* (vegyes adatbázis)
@@ -51,17 +51,19 @@ RANDOM_SEED   = 67     # Rögzített magérték a reprodukálható train/test sp
 def load_dataset_paths(image_dir, mask_dir, mask_suffixes,
                        image_exts=None, mask_exts=None,
                        only_cross_image=False):
-
+    """
+    Összepárosítja az `image_dir` könyvtárban található manipulált képeket
+    a `mask_dir` könyvtárban lévő Ground Truth (GT) maszkjaikkal.
+    """
     if image_exts is None:
         image_exts = [".jpg"]
     if mask_exts is None:
         mask_exts = [".png"]
 
     # --- 1. Képfájlok összegyűjtése duplikáció-szűréssel ---
-    # HIBAJAVÍTÁS: Windows alatt a glob.glob nem különbözteti meg a kis- és
-    # nagybetűket (pl. ".tif" és ".TIF" ugyanazokat a fájlokat adja vissza).
-    # Az os.path.normcase készlettel (seen_norm_paths) kizárjuk a duplikációt,
-    # így egyetlen kép sem kerülhet be egyszerre a train és a test halmazba.
+    # Kis- és nagybetű-érzéketlen fájlrendszereken (pl. Windows) a ".tif" és ".TIF"
+    # kiterjesztések ugyanazokat az állományokat adnák vissza; az os.path.normcase
+    # halmaz megakadályozza a képek többszörös bekerülését.
     found_images = []
     seen_norm_paths = set()
     for ext in image_exts:
@@ -84,7 +86,6 @@ def load_dataset_paths(image_dir, mask_dir, mask_suffixes,
         base_name = os.path.splitext(basename)[0]
         mask_found = False
 
-        # Végigpróbáljuk az összes megadott utótag és kiterjesztés kombinációt
         for suffix in mask_suffixes:
             for m_ext in mask_exts:
                 mask_path = os.path.join(mask_dir, f"{base_name}{suffix}{m_ext}")

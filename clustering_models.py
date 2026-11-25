@@ -51,7 +51,7 @@ a joblib.dump / joblib.load közvetlenül működik velük.
        aktív komponensek számát (n_active_components_), és sokkal tisztább,
        zajmentesebb hőtérkép-hátteret ad a pixelszintű lokalizációhoz.
 
-─── Felügyelt N-osztályos leképezés (3-osztályos séma — checklist #1) ──────────
+─── Felügyelt N-osztályos leképezés (3-osztályos séma) ─────────────────────────
   A GMM és a BayesianGMM önmagában felügyelet nélküli sűrűségbecslő. A fit(X, y)
   hívás során a tanítóhalmaz ismert y in {0, 1, 2} (Uniform / Border / Spliced)
   címkéi alapján minden k-adik komponenst a benne lévő minták TÖBBSÉGI
@@ -82,7 +82,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 def _assign_components_to_classes(hard_labels, y, classes, n_components):
     """
     Meghatározza minden GMM/BGMM komponenshez a többségi tanítóosztályt,
-    és ütközésmentes biztonsági mentéssel (fallback) garantálja, hogy
+    és ütközésmentes biztonsági hozzárendeléssel (fallback) garantálja, hogy
     minden osztályhoz tartozzon legalább egy komponens.
 
     Paraméterek:
@@ -101,7 +101,7 @@ def _assign_components_to_classes(hard_labels, y, classes, n_components):
     # 1. Kiszámítjuk minden k komponensre az egyes osztályok relatív gyakoriságát.
     #    Ha egy komponens üres marad (mask.sum() == 0, pl. BayesianEM-ben lenullázott
     #    súlyú komponens), a sora csupa 0 marad -> argmax a 0. indexet (Uniform) adja,
-    #    ami biztonságos, mert a γ_k(x) felelősségi súlya úgyis ~0.
+    #    ami biztonságos, mert a γ_k(x) felelősségi súlya ~0.
     for k in range(n_components):
         mask = (hard_labels == k)
         if np.any(mask):
@@ -112,12 +112,11 @@ def _assign_components_to_classes(hard_labels, y, classes, n_components):
     # 2. Alapértelmezett hozzárendelés: minden komponens a többségi osztályát kapja
     component_to_class_idx = np.argmax(class_rates, axis=1)
 
-    # 3. Ütközésmentes biztonsági mentés (fallback):
+    # 3. Ütközésmentes biztonsági hozzárendelés (fallback):
     #    Ha valamelyik ci osztály egyetlen komponensben sem szerzett többséget,
     #    megkeressük azt a komponenst, ahol a ci osztály aránya a legmagasabb,
-    #    de ügyelünk arra, hogy:
-    #      a) ne írjunk felül egy korábbi hiányzó osztálynak már odaítélt komponenst,
-    #      b) ne vegyük el egy másik osztály utolsó (egyetlen) komponensét sem.
+    #    ügyelve arra, hogy ne írjunk felül már lefoglalt tartalékot, és ne vegyük
+    #    el egy másik osztály egyetlen megmaradt komponensét sem.
     reserved_components = set()
     for ci in range(n_classes):
         if not np.any(component_to_class_idx == ci):
@@ -128,14 +127,11 @@ def _assign_components_to_classes(hard_labels, y, classes, n_components):
                 if cand_k in reserved_components:
                     continue
                 current_owner = component_to_class_idx[cand_k]
-                # Csak akkor vesszük el a komponenst a jelenlegi tulajdonosától,
-                # ha annak az osztálynak marad még legalább egy másik komponense:
                 if np.sum(component_to_class_idx == current_owner) > 1:
                     component_to_class_idx[cand_k] = ci
                     reserved_components.add(cand_k)
                     assigned = True
                     break
-            # Extrém végső eset (ha n_components == n_classes és lánc-ütközés van):
             if not assigned:
                 for cand_k in candidate_order:
                     cand_k = int(cand_k)
@@ -205,8 +201,7 @@ class GMMClassifier(BaseEstimator, ClassifierMixin):
         self.classes_ = np.unique(y)
         n_classes     = len(self.classes_)
 
-        # Biztosítjuk, hogy legalább annyi komponens legyen, ahány osztály van
-        # (self.n_components értékét nem írjuk felül az sklearn klónozhatóság miatt)
+        # Legalább annyi komponens illesztése, ahány osztály szerepel a címkékben
         self.effective_n_components_ = max(int(self.n_components), n_classes)
 
         # ── 1. Standard EM illesztés ───────────────────────────────────
